@@ -22,7 +22,7 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("WifiSimpleAdhocGrid");
 
-std::stack<uint64_t> uidStacks[100];
+std::stack<uint64_t> uidStacks[800];
 
 bool searchInStack(std::stack <uint64_t> s, uint64_t value) { 
   while (!s.empty()) { 
@@ -40,8 +40,7 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet){
   Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
   Ipv4Address ip_sender = iaddr.GetLocal (); 
 
-  NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ip_sender << "\tGoing to send packet with uid: " << packet->GetUid());
-  uidStacks[socket->GetNode()->GetId ()].push(packet->GetUid());
+  NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ip_sender << "\tGoing to send packet");
   socket->Send (packet);
   
   // socket->Close ();
@@ -65,41 +64,68 @@ void ReceivePacket (Ptr<Socket> socket){
     Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
     Ipv4Address ip_receiver = iaddr.GetLocal (); 
 
-    Ipv4Address destination = ns3::Ipv4Address(payload.c_str());
-
-    // NS_LOG_UNCOND("Receiver: " << ip_receiver << " Destination " << destination);
-    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << pkt->GetUid() << " from: " << ip_sender << " to: " << payload);
-
-    // Decrement TTL
+       // Decrement TTL
+    /*
             std::string delimiter = ";";
             size_t pos;
             std::string indirizzo = payload.substr(0, pos = payload.find(delimiter));
             int TTL = std:: stoi(payload.substr(pos+1, pos));
-            TTL = TTL-1;
+      */      
 
-    if(ip_receiver != destination && TTL != 0) {
-      if (searchInStack(uidStacks[socket->GetNode()->GetId ()], pkt->GetUid()) == false){
-            InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80); 
-            socket->SetAllowBroadcast (true);
-            socket->Connect (remote);
+            std::string delimiter = ";";
+            int TTL;
+            std::string indirizzo;
+            int Uid;
+            size_t pos = 0;
+            int i = 0;
+            NS_LOG_UNCOND("Complete payload " << payload);
+            while ((pos = payload.find(delimiter)) != std::string::npos) {
+              if(i == 0) indirizzo = payload.substr(0, pos);
+              if(i == 1) TTL = std:: stoi(payload.substr(0, pos));
+              if(i == 2) Uid = std:: stoi(payload.substr(0, pos));
+              NS_LOG_UNCOND("PORCO DEMONIO, Sono con i " << i << " e il valore è : "<<payload.substr(0, pos));
+              payload.erase(0, pos + delimiter.length());
+              i++;
+            }
+            NS_LOG_UNCOND("indirizzo " << indirizzo);
+            NS_LOG_UNCOND("TTL " << TTL);
+            NS_LOG_UNCOND("Uid " << Uid);
+
+            TTL = TTL-1;
             
-            // Update packet with new TTL
-            std::ostringstream msg; msg << indirizzo << ';' << TTL;
-            uint32_t packetSize = msg.str().length()+1;
-            pkt->CopyData((uint8_t*) msg.str().c_str(),packetSize);
-            
-            NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "Spedisco il pacchetto  " << pkt->GetUid()<< "and TTL "<< TTL);
-            GenerateTraffic(socket, pkt);
-            /*Simulator::Schedule (Seconds (5.0), &GenerateTraffic,
-                                socket, pkt);*/
-      
-            if (uidStacks[socket->GetNode()->GetId ()].size() >= 25) uidStacks[socket->GetNode()->GetId ()].pop();
-      } else {
-        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tI've already scheduled the message with uid: " << pkt->GetUid());
-        // socket->Close ();
-      }
+
+    Ipv4Address destination = ns3::Ipv4Address(indirizzo.c_str());
+
+    // NS_LOG_UNCOND("Receiver: " << ip_receiver << " Destination " << destination);
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << Uid<< " from: " << ip_sender << " to: " << indirizzo);
+
+ 
+
+    if(ip_receiver != destination) {
+      if(TTL != 0){
+        if (searchInStack(uidStacks[socket->GetNode()->GetId ()], Uid) == false){
+              InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80); 
+              socket->SetAllowBroadcast (true);
+              socket->Connect (remote);
+              
+              // Update packet with new TTL
+              std::ostringstream msg; msg << indirizzo << ';' << TTL << ";"<< Uid;
+              uint32_t packetSize = msg.str().length()+1;
+              Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
+              NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "Spedisco il pacchetto  " << Uid << " and TTL "<< TTL <<" con ID "<< Uid);
+              uidStacks[socket->GetNode()->GetId ()].push(Uid);
+              GenerateTraffic(socket, packet);
+              /*Simulator::Schedule (Seconds (5.0), &GenerateTraffic,
+                                  socket, pkt);*/
+        
+              if (uidStacks[socket->GetNode()->GetId ()].size() >= 25) uidStacks[socket->GetNode()->GetId ()].pop();
+        } else {
+          NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tI've already scheduled the message with uid: " << Uid);
+          // socket->Close ();
+        }
+      }else NS_LOG_UNCOND("TTL Scaduto");
     } else {
-      NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<" I am " << ip_receiver << " finally receiverd the package with uid: " << pkt->GetUid() );
+      NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<" I am " << ip_receiver << " finally receiverd the package with uid: " << Uid );
       // socket->Close ();
     }
   } 
@@ -112,13 +138,15 @@ int main (int argc, char *argv[])
   double distance = 250;  // m
   //uint32_t packetSize = 1000; // bytes
   uint32_t numPackets = 1;
-  uint32_t numNodes = 25;  // by default, 5x5
+  uint32_t numNodes = 250;  // by default, 5x5
   uint32_t sinkNode = 0;
-  uint32_t sourceNode = 24;
+  uint32_t sourceNode = 199;
   uint32_t TTL = 2;
+  uint32_t Uid = 0;
   double interval = 25.0; // seconds
   bool verbose = false;
   bool tracing = false;
+
 
 
   double rss = -80;  // -dBm
@@ -205,7 +233,7 @@ int main (int argc, char *argv[])
                                  "MinY", DoubleValue (0.0),
                                  "DeltaX", DoubleValue (distance),
                                  "DeltaY", DoubleValue (distance),
-                                 "GridWidth", UintegerValue (5),
+                                 "GridWidth", UintegerValue (25),
                                  "LayoutType", StringValue ("RowFirst"));
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (c);
@@ -252,7 +280,8 @@ int main (int argc, char *argv[])
   Ipv4InterfaceAddress iaddr = c.Get(sinkNode)->GetObject<Ipv4>()->GetAddress (1,0);
   Ipv4Address ip_receiver = iaddr.GetLocal ();
 
-  std::ostringstream msg; msg << ip_receiver << ';' << TTL ;
+  std::ostringstream msg; msg << ip_receiver << ';' << TTL << ";" << Uid;
+  NS_LOG_UNCOND("First payload " << msg.str().c_str());
   uint32_t packetSize = msg.str().length()+1;  // where packetSize replace pktSize
   Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
 
@@ -265,7 +294,7 @@ int main (int argc, char *argv[])
   int x=0, y=0;
   AnimationInterface anim("adhoc-grid.xml");
   for(uint32_t i=0; i<numNodes; ++i){
-      if(i != 0 && i % 5 == 0) {
+      if(i != 0 && i % 25 == 0) {
         x = 0;
         y += distance;
       }
