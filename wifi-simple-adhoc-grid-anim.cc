@@ -86,24 +86,32 @@
 #include "ns3/internet-stack-helper.h"
 #include "ns3/netanim-module.h"
 
+#include <stack> 
+#include <algorithm>
+
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("WifiSimpleAdhocGrid");
 
+bool searchInStack(std::stack <uint64_t> s, uint64_t value) { 
+  while (!s.empty()) { 
+      uint64_t top = s.top();
+      NS_LOG_UNCOND("Search value " << value << " top value " << top);
+      if(value == top) return true; 
+      s.pop(); 
+  } 
+  return false;
+}
 
 
-static void GenerateTraffic (Ptr<Socket> socket, uint32_t pktSize, uint32_t pktCount, Time pktInterval,Ptr<Packet> packet  ){
-  if (pktCount > 0){
-    Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
-    Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
-    Ipv4Address ip_sender = iaddr.GetLocal (); 
+static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet){
+  Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
+  Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
+  Ipv4Address ip_sender = iaddr.GetLocal (); 
 
-    NS_LOG_UNCOND ("Timestamp: " << Simulator::Now().GetSeconds() << " - I'm " << ip_sender << " Going to send the package n: " << pktCount);
-    socket->Send (packet);
-    Simulator::Schedule (pktInterval, &GenerateTraffic,
-    socket, pktSize, pktCount - 1, pktInterval, packet);
-  }
-  else socket->Close ();
+  NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ip_sender << "\tGoing to send packet with uid: " << packet->GetUid());
+  socket->Send (packet);
+  // socket->Close ();
 }
 
 
@@ -111,6 +119,9 @@ void ReceivePacket (Ptr<Socket> socket){
   Address from;
   Ipv4Address ip_sender;
   Ptr<Packet> pkt;
+
+  std::stack<uint64_t> uidStack; 
+
   while (pkt = socket->RecvFrom(from)){ 
 
     uint8_t *buffer = new uint8_t[pkt->GetSize ()];
@@ -125,16 +136,30 @@ void ReceivePacket (Ptr<Socket> socket){
 
     Ipv4Address destination = ns3::Ipv4Address(payload.c_str());
 
-    NS_LOG_UNCOND("Timestamp: " << Simulator::Now().GetSeconds() <<" Hello, I'm " << ip_receiver << " and I've received " <<  pkt->GetSize () <<" bytes from " << ip_sender << " The payload is: " << payload);
-    if( ip_receiver != destination ) {
-        InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80); 
-        socket->SetAllowBroadcast (true);
-        socket->Connect (remote);
-        Simulator::Schedule (Seconds(0), &GenerateTraffic,
-        socket, pkt->GetSize(), 1, Seconds(0),pkt);
+    // NS_LOG_UNCOND("Receiver: " << ip_receiver << " Destination " << destination);
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << pkt->GetUid() << " from: " << ip_sender << " to: " << payload);
+
+    if(ip_receiver != destination) {
+      if (searchInStack(uidStack, pkt->GetUid()) == false){
+            InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80); 
+            socket->SetAllowBroadcast (true);
+            socket->Connect (remote);
+            
+            uidStack.push(pkt->GetUid());
+            GenerateTraffic(socket, pkt);
+      
+            if (uidStack.size() >= 25) uidStack.pop();
+      } else {
+        NS_LOG_UNCOND("I am " << ip_receiver << " and I've already scheduled this message");
+        socket->Close ();
       }
+    } else {
+      NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<" I am " << ip_receiver << " finally receiverd the package! " );
+      // socket->Close ();
+    }
   } 
 }
+
 
 int main (int argc, char *argv[])
 {
@@ -283,9 +308,8 @@ int main (int argc, char *argv[])
   uint32_t packetSize = msg.str().length()+1;  // where packetSize replace pktSize
   Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
 
-  // Give OLSR time to converge-- 30 seconds perhaps
   Simulator::Schedule (Seconds (30.0), &GenerateTraffic,
-                       source, packetSize, numPackets, interPacketInterval,packet);
+                       source, packet);
   
 
   // Output what we are doing
@@ -299,14 +323,14 @@ int main (int argc, char *argv[])
         y += distance;
       }
       anim.SetConstantPosition(c.Get(i), x, y);
-      NS_LOG_UNCOND("Coordination for point " << i << " (" << x << ", "<< y << ")");
+      // NS_LOG_UNCOND("Coordination for point " << i << " (" << x << ", "<< y << ")");
       x = x+distance;
   }
   
   anim.UpdateNodeDescription(c.Get(sourceNode),"Sender");
   anim.UpdateNodeDescription(c.Get(sinkNode),"Receiver");
 
-  Simulator::Stop (Seconds (150.0));
+  Simulator::Stop (Seconds (400.0));
   
   Simulator::Run ();
   Simulator::Destroy ();
