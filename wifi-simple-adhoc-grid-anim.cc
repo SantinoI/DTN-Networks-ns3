@@ -93,10 +93,12 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("WifiSimpleAdhocGrid");
 
+std::stack<uint64_t> uidStacks[100];
+
 bool searchInStack(std::stack <uint64_t> s, uint64_t value) { 
   while (!s.empty()) { 
       uint64_t top = s.top();
-      NS_LOG_UNCOND("Search value " << value << " top value " << top);
+      // NS_LOG_UNCOND("Search value " << value << " top value " << top);
       if(value == top) return true; 
       s.pop(); 
   } 
@@ -110,7 +112,9 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet){
   Ipv4Address ip_sender = iaddr.GetLocal (); 
 
   NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ip_sender << "\tGoing to send packet with uid: " << packet->GetUid());
+  uidStacks[socket->GetNode()->GetId ()].push(packet->GetUid());
   socket->Send (packet);
+  
   // socket->Close ();
 }
 
@@ -119,8 +123,6 @@ void ReceivePacket (Ptr<Socket> socket){
   Address from;
   Ipv4Address ip_sender;
   Ptr<Packet> pkt;
-
-  std::stack<uint64_t> uidStack; 
 
   while (pkt = socket->RecvFrom(from)){ 
 
@@ -140,21 +142,22 @@ void ReceivePacket (Ptr<Socket> socket){
     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << pkt->GetUid() << " from: " << ip_sender << " to: " << payload);
 
     if(ip_receiver != destination) {
-      if (searchInStack(uidStack, pkt->GetUid()) == false){
+      if (searchInStack(uidStacks[socket->GetNode()->GetId ()], pkt->GetUid()) == false){
             InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80); 
             socket->SetAllowBroadcast (true);
             socket->Connect (remote);
             
-            uidStack.push(pkt->GetUid());
             GenerateTraffic(socket, pkt);
+            /*Simulator::Schedule (Seconds (5.0), &GenerateTraffic,
+                                socket, pkt);*/
       
-            if (uidStack.size() >= 25) uidStack.pop();
+            if (uidStacks[socket->GetNode()->GetId ()].size() >= 25) uidStacks[socket->GetNode()->GetId ()].pop();
       } else {
-        NS_LOG_UNCOND("I am " << ip_receiver << " and I've already scheduled this message");
-        socket->Close ();
+        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tI've already scheduled the message with uid: " << pkt->GetUid());
+        // socket->Close ();
       }
     } else {
-      NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<" I am " << ip_receiver << " finally receiverd the package! " );
+      NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<" I am " << ip_receiver << " finally receiverd the package with uid: " << pkt->GetUid() );
       // socket->Close ();
     }
   } 
@@ -207,7 +210,7 @@ int main (int argc, char *argv[])
   // FROM WIFI SIMPLE ADHOC GRID
 
   // set it to zero; otherwise, gain will be added
-  wifiPhy.Set ("RxGain", DoubleValue (1) );
+  wifiPhy.Set ("RxGain", DoubleValue (2) );
   // ns-3 supports RadioTap and Prism tracing extensions for 802.11b
   wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
 
@@ -277,6 +280,7 @@ int main (int argc, char *argv[])
 
   Ptr<Socket> recvSinkArray[numNodes];
   for(uint32_t i=0; i<numNodes; ++i){
+    uidStacks[c.Get (i)->GetId ()] = std::stack<uint64_t>();
     recvSinkArray[i] = Socket::CreateSocket (c.Get (i), tid);
     recvSinkArray[i]->Bind (local);
     recvSinkArray[i]->SetRecvCallback (MakeCallback (&ReceivePacket));
@@ -310,7 +314,6 @@ int main (int argc, char *argv[])
 
   Simulator::Schedule (Seconds (30.0), &GenerateTraffic,
                        source, packet);
-  
 
   // Output what we are doing
   // NS_LOG_UNCOND ("Testing from node " << sourceNode << " to " << sinkNode << " with grid distance " << distance);
@@ -330,7 +333,7 @@ int main (int argc, char *argv[])
   anim.UpdateNodeDescription(c.Get(sourceNode),"Sender");
   anim.UpdateNodeDescription(c.Get(sinkNode),"Receiver");
 
-  Simulator::Stop (Seconds (400.0));
+  Simulator::Stop (Seconds (900.0));
   
   Simulator::Run ();
   Simulator::Destroy ();
