@@ -1,74 +1,3 @@
-/* -*-  Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2009 University of Washington
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
- */
-
-//
-// This program configures a grid (default 5x5) of nodes on an
-// 802.11b physical layer, with
-// 802.11b NICs in adhoc mode, and by default, sends one packet of 1000
-// (application) bytes to node 1.
-//
-// The default layout is like this, on a 2-D grid.
-//
-// n20  n21  n22  n23  n24
-// n15  n16  n17  n18  n19
-// n10  n11  n12  n13  n14
-// n5   n6   n7   n8   n9
-// n0   n1   n2   n3   n4
-//
-// the layout is affected by the parameters given to GridPositionAllocator;
-// by default, GridWidth is 5 and numNodes is 25..
-//
-// There are a number of command-line options available to control
-// the default behavior.  The list of available command-line options
-// can be listed with the following command:
-// ./waf --run "wifi-simple-adhoc-grid --help"
-//
-// Note that all ns-3 attributes (not just the ones exposed in the below
-// script) can be changed at command line; see the ns-3 documentation.
-//
-// For instance, for this configuration, the physical layer will
-// stop successfully receiving packets when distance increases beyond
-// the default of 500m.
-// To see this effect, try running:
-//
-// ./waf --run "wifi-simple-adhoc --distance=500"
-// ./waf --run "wifi-simple-adhoc --distance=1000"
-// ./waf --run "wifi-simple-adhoc --distance=1500"
-//
-// The source node and sink node can be changed like this:
-//
-// ./waf --run "wifi-simple-adhoc --sourceNode=20 --sinkNode=10"
-//
-// This script can also be helpful to put the Wifi layer into verbose
-// logging mode; this command will turn on all wifi logging:
-//
-// ./waf --run "wifi-simple-adhoc-grid --verbose=1"
-//
-// By default, trace file writing is off-- to enable it, try:
-// ./waf --run "wifi-simple-adhoc-grid --tracing=1"
-//
-// When you are done tracing, you will notice many pcap trace files
-// in your directory.  If you have tcpdump installed, you can try this:
-//
-// tcpdump -r wifi-simple-adhoc-grid-0-0.pcap -nn -tt
-//
-
 #include "ns3/command-line.h"
 #include "ns3/config.h"
 #include "ns3/uinteger.h"
@@ -141,12 +70,25 @@ void ReceivePacket (Ptr<Socket> socket){
     // NS_LOG_UNCOND("Receiver: " << ip_receiver << " Destination " << destination);
     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << pkt->GetUid() << " from: " << ip_sender << " to: " << payload);
 
-    if(ip_receiver != destination) {
+    // Decrement TTL
+            std::string delimiter = ";";
+            size_t pos;
+            std::string indirizzo = payload.substr(0, pos = payload.find(delimiter));
+            int TTL = std:: stoi(payload.substr(pos+1, pos));
+            TTL = TTL-1;
+
+    if(ip_receiver != destination && TTL != 0) {
       if (searchInStack(uidStacks[socket->GetNode()->GetId ()], pkt->GetUid()) == false){
             InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80); 
             socket->SetAllowBroadcast (true);
             socket->Connect (remote);
             
+            // Update packet with new TTL
+            std::ostringstream msg; msg << indirizzo << ';' << TTL;
+            uint32_t packetSize = msg.str().length()+1;
+            pkt->CopyData((uint8_t*) msg.str().c_str(),packetSize);
+            
+            NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "Spedisco il pacchetto  " << pkt->GetUid()<< "and TTL "<< TTL);
             GenerateTraffic(socket, pkt);
             /*Simulator::Schedule (Seconds (5.0), &GenerateTraffic,
                                 socket, pkt);*/
@@ -173,9 +115,11 @@ int main (int argc, char *argv[])
   uint32_t numNodes = 25;  // by default, 5x5
   uint32_t sinkNode = 0;
   uint32_t sourceNode = 24;
+  uint32_t TTL = 2;
   double interval = 25.0; // seconds
   bool verbose = false;
   bool tracing = false;
+
 
   double rss = -80;  // -dBm
 
@@ -308,7 +252,7 @@ int main (int argc, char *argv[])
   Ipv4InterfaceAddress iaddr = c.Get(sinkNode)->GetObject<Ipv4>()->GetAddress (1,0);
   Ipv4Address ip_receiver = iaddr.GetLocal ();
 
-  std::ostringstream msg; msg << ip_receiver << '\0';
+  std::ostringstream msg; msg << ip_receiver << ';' << TTL ;
   uint32_t packetSize = msg.str().length()+1;  // where packetSize replace pktSize
   Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
 
