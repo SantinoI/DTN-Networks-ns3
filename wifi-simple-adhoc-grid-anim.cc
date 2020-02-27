@@ -19,71 +19,11 @@
 #include "ns3/ipv4-list-routing-helper.h"
 #include "ns3/internet-stack-helper.h"
 #include "ns3/netanim-module.h"
+#include "ns3/mobility-module.h"
 
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("WifiSimpleAdhocGrid");
-
-class PayLoadConstructor{
-  private:
-    uint32_t ttl;
-    uint32_t uid;
-    Ipv4Address destinationAddress;
-    std::string delimiter;
-  
-  public:
-    PayLoadConstructor(){
-      delimiter =  ";";
-    }
-
-    uint32_t getTtl(){ return ttl; };
-    uint32_t getUid(){ return uid; };
-    Ipv4Address getDestinationAddress(){ return destinationAddress; };
-
-    void setTtl(uint32_t value){ ttl = value; };
-    void setUid(uint32_t value){ uid = value; };
-    void setDestinationAddress(Ipv4Address value){ destinationAddress = value; };
-
-    // Ipv4Address getDestinationAddressAsString(){ return destinationAddress; };
-    void setDestinationAddressFromString(std::string value){ destinationAddress = ns3::Ipv4Address(value.c_str()); };
-
-    void decreaseTtl(){ ttl -= 1; };
-
-    void fromString(std::string stringPayload){
-      size_t pos = 0;
-      int iterationCounter = 0;
-      std::string token;
-      while ((pos = stringPayload.find(delimiter)) != std::string::npos) {
-          token = stringPayload.substr(0, pos);
-          if(iterationCounter == 0) destinationAddress = ns3::Ipv4Address(token.c_str());  // destinationAddress = token;
-          else ttl = std:: stoi(token);
-          stringPayload.erase(0, pos + delimiter.length());
-          iterationCounter++;
-      }
-      uid = std:: stoi(stringPayload);
-    }
-
-    void fromPacket(Ptr<Packet> packet){
-      uint8_t *buffer = new uint8_t[packet->GetSize ()];
-      packet->CopyData(buffer, packet->GetSize ());
-      std::string stringPayload = std::string((char*)buffer);
-     
-      fromString(stringPayload);
-    };
-
-    std::ostringstream toString(){
-      std::ostringstream msg; 
-      msg << destinationAddress << delimiter << ttl << delimiter << uid;
-      return msg;              
-    };
-
-    Ptr<Packet> toPacket(){
-      std::ostringstream msg = toString();
-      uint32_t packetSize = msg.str().length()+1;
-      Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
-      return packet;        
-    }
-};
 
 class NodeHandler{
   private:
@@ -91,7 +31,6 @@ class NodeHandler{
     double packetsSent;
     std::stack<uint64_t> packetsScheduled;
     // Next routing table values    
-  
   public:
     NodeHandler(){
       bytesSent = 0.00;
@@ -148,18 +87,35 @@ void ReceivePacket (Ptr<Socket> socket){
     Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
     Ipv4Address ip_receiver = iaddr.GetLocal (); 
 
-    PayLoadConstructor payload = PayLoadConstructor();
-    payload.fromPacket(pkt);
-    payload.decreaseTtl();
-    // Only for clear code, nothing else for the moment
-    uint32_t UID = payload.getUid();
-    uint32_t TTL = payload.getTtl();
-    Ipv4Address destinationAddress = payload.getDestinationAddress();
+    // Following block of code to insert in class please
+    uint8_t *buffer = new uint8_t[pkt->GetSize ()];
+    pkt->CopyData(buffer, pkt->GetSize ());
     
+    std::string payload = std::string((char*)buffer);
+    std::string delimiter =  ";";
+      
+    uint32_t TTL;
+    uint32_t UID;
+    std::string destinationAddress;
+      
+    size_t pos = 0;
+    int iterationCounter = 0;
+    std::string token;
+    while ((pos = payload.find(delimiter)) != std::string::npos) {
+        token = payload.substr(0, pos);
+        if(iterationCounter == 0) destinationAddress = token;
+        else TTL = std:: stoi(token);
+        payload.erase(0, pos + delimiter.length());
+        iterationCounter++;
+    }
+    UID = std:: stoi(payload);
+    TTL -= 1;
+    
+    Ipv4Address destination = ns3::Ipv4Address(destinationAddress.c_str());
     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID << " and TTL " << TTL << " from: " << ip_sender << " to: " << destinationAddress);
 
 
-    if(ip_receiver != destinationAddress) {
+    if(ip_receiver != destination) {
       if(TTL != 0){
         if (nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID) == false){
               InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80); 
@@ -167,9 +123,9 @@ void ReceivePacket (Ptr<Socket> socket){
               socket->Connect (remote);
               
               // Update packet with new TTL
-              // std::ostringstream msg; msg << destinationAddress << ';' << TTL << ";"<< UID;
-              // uint32_t packetSize = msg.str().length()+1;
-              Ptr<Packet> packet = payload.toPacket();
+              std::ostringstream msg; msg << destinationAddress << ';' << TTL << ";"<< UID;
+              uint32_t packetSize = msg.str().length()+1;
+              Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
               NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ip_sender << "\tGoing to send packet with uid: " << UID << " and TTL " << TTL );
   
               Ptr<UniformRandomVariable> x = CreateObject<UniformRandomVariable> ();
@@ -196,15 +152,15 @@ int main (int argc, char *argv[]){
   double distance = 150;  // m
   //uint32_t packetSize = 1000; // bytes
   uint32_t numPackets = 1;
-  uint32_t gridWidth = 10;
-  uint32_t numNodes = 50;  // by default, 5x5
-  uint32_t sinkNode = 0;
-  uint32_t sourceNode = 6;
+  uint32_t gridWidth = 25;
+  uint32_t numNodes = 500;  // by default, 5x5
+  uint32_t sinkNode = 13;
+  uint32_t sourceNode = 0;
   double interval = 25.0; // seconds
   bool verbose = false;
   bool tracing = false;
 
-  uint32_t TTL = 6;
+  uint32_t TTL = 10;
   uint32_t UID = 0;
 
   double rss = -80;  // -dBm
@@ -242,7 +198,7 @@ int main (int argc, char *argv[]){
   // FROM WIFI SIMPLE ADHOC GRID
 
   // set it to zero; otherwise, gain will be added
-  wifiPhy.Set ("RxGain", DoubleValue (-5) );
+  wifiPhy.Set ("RxGain", DoubleValue (-30) );
   // ns-3 supports RadioTap and Prism tracing extensions for 802.11b
   wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
 
@@ -277,8 +233,21 @@ int main (int argc, char *argv[]){
   wifiMac.SetType ("ns3::AdhocWifiMac");
   NetDeviceContainer devices = wifi.Install (wifiPhy, wifiMac, c);
 
-  MobilityHelper mobility;
 
+  MobilityHelper mobility;
+  mobility.SetPositionAllocator ("ns3::RandomDiscPositionAllocator",
+                                  "X", StringValue ("300.0"),
+                                  "Y", StringValue ("300.0"),
+                                  "Rho", StringValue ("ns3::UniformRandomVariable[Min=0|Max=30]"));
+   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
+                              "Mode", StringValue ("Time"),
+                              "Time", StringValue ("2s"),
+                              "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"),
+                              "Bounds", StringValue ("0|1000|0|1000"));
+   mobility.InstallAll();
+  InternetStackHelper internet;
+  // internet.SetRoutingHelper (list); // has effect on the next Install ()
+  internet.Install (c);
   /*
    * WITHOUT GRID 
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
@@ -287,7 +256,7 @@ int main (int argc, char *argv[]){
   positionAlloc->Add (Vector (10.0, 0.0, 0.0));
   positionAlloc->Add (Vector (15.0, 0.0, 0.0));
   */
-
+  /*
   mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
                                  "MinX", DoubleValue (0.0),
                                  "MinY", DoubleValue (0.0),
@@ -301,7 +270,7 @@ int main (int argc, char *argv[]){
   InternetStackHelper internet;
   // internet.SetRoutingHelper (list); // has effect on the next Install ()
   internet.Install (c);
-
+*/
   Ipv4AddressHelper ipv4;
   NS_LOG_INFO ("Assign IP Addresses.");
   ipv4.SetBase ("10.1.0.0", "255.255.0.0");
@@ -326,12 +295,11 @@ int main (int argc, char *argv[]){
 
   Ipv4InterfaceAddress iaddr = c.Get(sinkNode)->GetObject<Ipv4>()->GetAddress (1,0);
   Ipv4Address ip_receiver = iaddr.GetLocal ();
-  
-  PayLoadConstructor payload = PayLoadConstructor();
-  payload.setTtl(TTL);
-  payload.setUid(UID);
-  payload.setDestinationAddress(ip_receiver);
-  Ptr<Packet> packet = payload.toPacket();
+
+  std::ostringstream msg; msg << ip_receiver << ';' << TTL << ";" << UID;
+  NS_LOG_UNCOND("First payload " << msg.str().c_str());
+  uint32_t packetSize = msg.str().length()+1;  // where packetSize replace pktSize
+  Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
 
   Simulator::Schedule (Seconds (30.0), &GenerateTraffic,
                        source, packet, UID);
