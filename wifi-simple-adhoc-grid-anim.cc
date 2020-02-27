@@ -1,3 +1,9 @@
+
+#include <stack> 
+#include <vector> 
+#include <algorithm>
+
+#include "ns3/core-module.h"
 #include "ns3/command-line.h"
 #include "ns3/config.h"
 #include "ns3/uinteger.h"
@@ -9,40 +15,60 @@
 #include "ns3/ipv4-address-helper.h"
 #include "ns3/yans-wifi-channel.h"
 #include "ns3/mobility-model.h"
-#include "ns3/olsr-helper.h"
 #include "ns3/ipv4-static-routing-helper.h"
 #include "ns3/ipv4-list-routing-helper.h"
 #include "ns3/internet-stack-helper.h"
 #include "ns3/netanim-module.h"
 
-#include <stack> 
-#include <algorithm>
-
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("WifiSimpleAdhocGrid");
 
-std::stack<uint64_t> uidStacks[800];
+class NodeHandler{
+  private:
+    double bytesSent;
+    double packetsSent;
+    std::stack<uint64_t> packetsScheduled;
+    // Next routing table values    
+  public:
+    NodeHandler(){
+      bytesSent = 0.00;
+      packetsSent = 0.00;
+    }
+    int getBytesSent(){ return bytesSent; }
+    int getPacketsSent(){ return packetsSent; }
 
-bool searchInStack(std::stack <uint64_t> s, uint64_t value) { 
-  while (!s.empty()) { 
-      uint64_t top = s.top();
-      // NS_LOG_UNCOND("Search value " << value << " top value " << top);
-      if(value == top) return true; 
-      s.pop(); 
-  } 
-  return false;
-}
+    void setBytesSent(double value){ bytesSent = value; }
+    void setPacketsSent(double value){ packetsSent = value; }
 
+    void increaseBytesSent(double value){ bytesSent += value; }
+    void increasePacketsSent(double value){ packetsSent += value; }
 
-static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet){
+    bool searchInStack(uint64_t value){
+      std::stack<uint64_t> s = packetsScheduled;  // Create a copy for pop
+      while (!s.empty()) { 
+        uint64_t top = s.top();
+        if(value == top) return true; 
+        s.pop(); 
+      } 
+      return false; 
+    }
+    void pushInStack(uint64_t value){ packetsScheduled.push(value); }
+    void popFromStack(){ packetsScheduled.pop(); }
+};
+
+std::vector<NodeHandler> nodeHandlerArray;
+
+static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UID){
   // Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
   // Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
   // Ipv4Address ip_sender = iaddr.GetLocal (); 
 
   // NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ip_sender << "\tGoing to send packet");
   socket->Send (packet);
-  
+  nodeHandlerArray[socket->GetNode()->GetId()].pushInStack(UID);
+  nodeHandlerArray[socket->GetNode()->GetId()].increaseBytesSent((double)packet->GetSize());
+  nodeHandlerArray[socket->GetNode()->GetId()].increasePacketsSent(1);
   // socket->Close ();
 }
 
@@ -60,27 +86,11 @@ void ReceivePacket (Ptr<Socket> socket){
     Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
     Ipv4Address ip_receiver = iaddr.GetLocal (); 
 
-    /*
-     * EXAMPLE FROM SCRATCH
-    std::string s = "scott>=tiger>=mushroom";
-  std::string delimiter = ">=";
-
-  size_t pos = 0;
-  std::string token;
-  while ((pos = s.find(delimiter)) != std::string::npos) {
-      token = s.substr(0, pos);
-      std::cout << token << std::endl;
-      s.erase(0, pos + delimiter.length());
-  }
-  std::cout << s << std::endl;
-  */
-
     // Following block of code to insert in class please
     uint8_t *buffer = new uint8_t[pkt->GetSize ()];
     pkt->CopyData(buffer, pkt->GetSize ());
     
     std::string payload = std::string((char*)buffer);
-    NS_LOG_UNCOND("Il payload è :: " << payload);
     std::string delimiter =  ";";
       
     uint32_t TTL;
@@ -101,12 +111,12 @@ void ReceivePacket (Ptr<Socket> socket){
     TTL -= 1;
     
     Ipv4Address destination = ns3::Ipv4Address(destinationAddress.c_str());
-    //NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID<< " from: " << ip_sender << " to: " << destinationAddress);
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID << " and TTL " << TTL << " from: " << ip_sender << " to: " << destinationAddress);
 
 
     if(ip_receiver != destination) {
       if(TTL != 0){
-        if (searchInStack(uidStacks[socket->GetNode()->GetId ()], UID) == false){
+        if (nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID) == false){
               InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80); 
               socket->SetAllowBroadcast (true);
               socket->Connect (remote);
@@ -114,21 +124,20 @@ void ReceivePacket (Ptr<Socket> socket){
               // Update packet with new TTL
               std::ostringstream msg; msg << destinationAddress << ';' << TTL << ";"<< UID;
               uint32_t packetSize = msg.str().length()+1;
-              NS_LOG_UNCOND("IL payload E' : -----------------------"<< msg.str().c_str() );
               Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
               NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ip_sender << "\tGoing to send packet with uid: " << UID << " and TTL " << TTL );
   
-              uidStacks[socket->GetNode()->GetId ()].push(UID);
-              // GenerateTraffic(socket, packet);
-              Simulator::Schedule (Seconds (3.0 + socket->GetNode()->GetId ()), &GenerateTraffic,
-                                  socket, packet);
+              Ptr<UniformRandomVariable> x = CreateObject<UniformRandomVariable> ();
+              double randomPause = x->GetValue(0.1, 1.0);
+              // NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\tNodo numero: " << socket->GetNode()->GetId() << " attesa di " << randomPause );
+              Simulator::Schedule (Seconds(randomPause), &GenerateTraffic,
+                                  socket, packet, UID);
         
-              if (uidStacks[socket->GetNode()->GetId ()].size() >= 25) uidStacks[socket->GetNode()->GetId ()].pop();
         } else {
           NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tI've already scheduled the message with uid: " << UID);
           // socket->Close ();
         }
-      }else NS_LOG_UNCOND("TTL Scaduto");
+      } // else NS_LOG_UNCOND("TTL Scaduto");
     } else {
       NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<" I am " << ip_receiver << " finally receiverd the package with uid: " << UID );
       // socket->Close ();
@@ -137,20 +146,20 @@ void ReceivePacket (Ptr<Socket> socket){
 }
 
 
-int main (int argc, char *argv[])
-{
+int main (int argc, char *argv[]){
   std::string phyMode ("DsssRate1Mbps");
-  double distance = 250;  // m
+  double distance = 150;  // m
   //uint32_t packetSize = 1000; // bytes
   uint32_t numPackets = 1;
-  uint32_t numNodes = 250;  // by default, 5x5
+  uint32_t gridWidth = 25;
+  uint32_t numNodes = 500;  // by default, 5x5
   uint32_t sinkNode = 0;
   uint32_t sourceNode = 159;
   double interval = 25.0; // seconds
   bool verbose = false;
   bool tracing = false;
 
-  uint32_t TTL = 20;
+  uint32_t TTL = 10;
   uint32_t UID = 0;
 
   double rss = -80;  // -dBm
@@ -179,6 +188,8 @@ int main (int argc, char *argv[])
   NodeContainer c;
   c.Create (numNodes);
 
+  SeedManager::SetSeed (167);
+
   // The below set of helpers will help us to put together the wifi NICs we want
   WifiHelper wifi;
 
@@ -186,7 +197,7 @@ int main (int argc, char *argv[])
   // FROM WIFI SIMPLE ADHOC GRID
 
   // set it to zero; otherwise, gain will be added
-  wifiPhy.Set ("RxGain", DoubleValue (2) );
+  wifiPhy.Set ("RxGain", DoubleValue (1) );
   // ns-3 supports RadioTap and Prism tracing extensions for 802.11b
   wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
 
@@ -237,7 +248,7 @@ int main (int argc, char *argv[])
                                  "MinY", DoubleValue (0.0),
                                  "DeltaX", DoubleValue (distance),
                                  "DeltaY", DoubleValue (distance),
-                                 "GridWidth", UintegerValue (25),
+                                 "GridWidth", UintegerValue (gridWidth),
                                  "LayoutType", StringValue ("RowFirst"));
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (c);
@@ -248,7 +259,7 @@ int main (int argc, char *argv[])
 
   Ipv4AddressHelper ipv4;
   NS_LOG_INFO ("Assign IP Addresses.");
-  ipv4.SetBase ("10.1.1.0", "255.255.255.0");
+  ipv4.SetBase ("10.1.0.0", "255.255.0.0");
   Ipv4InterfaceContainer i = ipv4.Assign (devices);
 
   TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
@@ -256,25 +267,12 @@ int main (int argc, char *argv[])
 
   Ptr<Socket> recvSinkArray[numNodes];
   for(uint32_t i=0; i<numNodes; ++i){
-    uidStacks[c.Get (i)->GetId ()] = std::stack<uint64_t>();
+    nodeHandlerArray.push_back(*new NodeHandler());
     recvSinkArray[i] = Socket::CreateSocket (c.Get (i), tid);
     recvSinkArray[i]->Bind (local);
     recvSinkArray[i]->SetRecvCallback (MakeCallback (&ReceivePacket));
   }
 
-  //InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80);
-  
-  /*
-  Ptr<Socket> sourceArray[numNodes];
-  for(uint32_t i=0; i<numNodes; ++i){
-    sourceArray[i] = Socket::CreateSocket (c.Get (i), tid);
-    sourceArray[i]->SetAllowBroadcast (true);
-    sourceArray[i]->Connect (remote);
-    Simulator::Schedule (Seconds (5.0 * i), &GenerateTraffic,
-                        sourceArray[i], packetSize, numPackets, interPacketInterval);
-  }   
-  */
-  
   Ptr<Socket> source = Socket::CreateSocket (c.Get (sourceNode), tid);
   // InetSocketAddress remote = InetSocketAddress (i.GetAddress (sinkNode, 0), 80);
   InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80);
@@ -290,12 +288,12 @@ int main (int argc, char *argv[])
   Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
 
   Simulator::Schedule (Seconds (30.0), &GenerateTraffic,
-                       source, packet);
+                       source, packet, UID);
 
   int x=0, y=0;
   AnimationInterface anim("adhoc-grid.xml");
   for(uint32_t i=0; i<numNodes; ++i){
-      if(i != 0 && i % 25 == 0) {
+      if((i != 0) && (i % gridWidth == 0)) {
         x = 0;
         y += distance;
       }
@@ -310,6 +308,12 @@ int main (int argc, char *argv[])
   
   Simulator::Run ();
   Simulator::Destroy ();
+
+  /*
+  for(uint32_t i=0; i<numNodes; ++i){
+      NS_LOG_UNCOND("Il nodo: " << i << " ha inviato: " << nodeHandlerArray[i].getPacketsSent() << " pacchetti per " << nodeHandlerArray[i].getBytesSent() << "bytes.");
+  }
+  */
 
   return 0;
 }
