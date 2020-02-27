@@ -76,32 +76,32 @@ void ReceivePacket (Ptr<Socket> socket){
   */
 
     // Following block of code to insert in class please
-  uint8_t *buffer = new uint8_t[pkt->GetSize ()];
+    uint8_t *buffer = new uint8_t[pkt->GetSize ()];
     pkt->CopyData(buffer, pkt->GetSize ());
     
     std::string payload = std::string((char*)buffer);
-  std::string delimiter =  ";";
-    
+    NS_LOG_UNCOND("Il payload è :: " << payload);
+    std::string delimiter =  ";";
+      
     uint32_t TTL;
-  uint32_t UID;
-  std::string destinationAddress;
-    
+    uint32_t UID;
+    std::string destinationAddress;
+      
     size_t pos = 0;
-  int iterationCounter = 0;
-  std::string token;
-  while ((pos = payload.find(delimiter)) != std::string::npos) {
-      token = payload.substr(0, pos);
-      if(iterationCounter == 0) destinationAddress = token;
-      else TTL = std:: stoi(token);
-      payload.erase(0, pos + delimiter.length());
-      iterationCounter++;
-  }
-  UID = std:: stoi(payload);
-  
-    TTL = TTL-1;
-
+    int iterationCounter = 0;
+    std::string token;
+    while ((pos = payload.find(delimiter)) != std::string::npos) {
+        token = payload.substr(0, pos);
+        if(iterationCounter == 0) destinationAddress = token;
+        else TTL = std:: stoi(token);
+        payload.erase(0, pos + delimiter.length());
+        iterationCounter++;
+    }
+    UID = std:: stoi(payload);
+    TTL -= 1;
+    
     Ipv4Address destination = ns3::Ipv4Address(destinationAddress.c_str());
-  NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID<< " from: " << ip_sender << " to: " << destinationAddress);
+    //NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID<< " from: " << ip_sender << " to: " << destinationAddress);
 
 
     if(ip_receiver != destination) {
@@ -114,13 +114,14 @@ void ReceivePacket (Ptr<Socket> socket){
               // Update packet with new TTL
               std::ostringstream msg; msg << destinationAddress << ';' << TTL << ";"<< UID;
               uint32_t packetSize = msg.str().length()+1;
+              NS_LOG_UNCOND("IL payload E' : -----------------------"<< msg.str().c_str() );
               Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
               NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ip_sender << "\tGoing to send packet with uid: " << UID << " and TTL " << TTL );
   
               uidStacks[socket->GetNode()->GetId ()].push(UID);
               // GenerateTraffic(socket, packet);
               Simulator::Schedule (Seconds (3.0 + socket->GetNode()->GetId ()), &GenerateTraffic,
-                                  socket, pkt);
+                                  socket, packet);
         
               if (uidStacks[socket->GetNode()->GetId ()].size() >= 25) uidStacks[socket->GetNode()->GetId ()].pop();
         } else {
