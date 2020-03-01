@@ -101,6 +101,8 @@ class NodeHandler{
   private:
     double bytesSent;
     double packetsSent;
+    double bytesReceived;
+	double packetsReceived;
     std::stack<uint64_t> packetsScheduled;
     // Next routing table values    
   
@@ -115,8 +117,16 @@ class NodeHandler{
     void setBytesSent(double value){ bytesSent = value; }
     void setPacketsSent(double value){ packetsSent = value; }
 
+    int getBytesReceived(){ return bytesReceived; }
+    int getPacketsReceived(){ return packetsReceived; }
+
+    void setBytesReceived(double value){ bytesReceived = value; }
+    void setPacketsReceived(double value){ packetsReceived = value; }
+
     void increaseBytesSent(double value){ bytesSent += value; }
     void increasePacketsSent(double value){ packetsSent += value; }
+    void increaseBytesReceived(double value){ bytesReceived += value; }
+    void increasePacketsReceived(double value){ packetsReceived += value; }
 
     bool searchInStack(uint64_t value){
       std::stack<uint64_t> s = packetsScheduled;  // Create a copy for pop
@@ -153,6 +163,9 @@ void ReceivePacket (Ptr<Socket> socket){
   Ptr<Packet> pkt;
 
   while (pkt = socket->RecvFrom(from)){ 
+
+	nodeHandlerArray[socket->GetNode()->GetId()].increaseBytesReceived((double)pkt->GetSize());
+  	nodeHandlerArray[socket->GetNode()->GetId()].increasePacketsReceived(1);
 
     ip_sender = InetSocketAddress::ConvertFrom (from).GetIpv4 ();
 
