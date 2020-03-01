@@ -25,16 +25,25 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("WifiSimpleAdhocGrid");
 
+// Define enumeration for PayLoad type
+enum {
+	EPIDEMIC,
+	HELLO,
+	PROPHET
+};
+
 class PayLoadConstructor{
   private:
+  	int type;
     uint32_t ttl;
     uint32_t uid;
     Ipv4Address destinationAddress;
     std::string delimiter;
   
   public:
-    PayLoadConstructor(){
+    PayLoadConstructor(int _type){
       delimiter =  ";";
+      type = _type;
     }
 
     uint32_t getTtl(){ return ttl; };
@@ -54,14 +63,16 @@ class PayLoadConstructor{
       size_t pos = 0;
       int iterationCounter = 0;
       std::string token;
-      while ((pos = stringPayload.find(delimiter)) != std::string::npos) {
-          token = stringPayload.substr(0, pos);
-          if(iterationCounter == 0) destinationAddress = ns3::Ipv4Address(token.c_str());  // destinationAddress = token;
-          else ttl = std:: stoi(token);
-          stringPayload.erase(0, pos + delimiter.length());
-          iterationCounter++;
+      if(type == EPIDEMIC){
+            while ((pos = stringPayload.find(delimiter)) != std::string::npos) {
+                token = stringPayload.substr(0, pos);
+                if(iterationCounter == 0) destinationAddress = ns3::Ipv4Address(token.c_str());  // destinationAddress = token;
+                else ttl = std:: stoi(token);
+                stringPayload.erase(0, pos + delimiter.length());
+                iterationCounter++;
+            }
+            uid = std:: stoi(stringPayload);
       }
-      uid = std:: stoi(stringPayload);
     }
 
     void fromPacket(Ptr<Packet> packet){
@@ -149,7 +160,7 @@ void ReceivePacket (Ptr<Socket> socket){
     Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
     Ipv4Address ip_receiver = iaddr.GetLocal (); 
 
-    PayLoadConstructor payload = PayLoadConstructor();
+    PayLoadConstructor payload = PayLoadConstructor(EPIDEMIC);
     payload.fromPacket(pkt);
     payload.decreaseTtl();
     // Only for clear code, nothing else for the moment
@@ -342,7 +353,7 @@ int main (int argc, char *argv[]){
   Ipv4InterfaceAddress iaddr = c.Get(sinkNode)->GetObject<Ipv4>()->GetAddress (1,0);
   Ipv4Address ip_receiver = iaddr.GetLocal ();
   
-  PayLoadConstructor payload = PayLoadConstructor();
+  PayLoadConstructor payload = PayLoadConstructor(EPIDEMIC);
   payload.setTtl(TTL);
   payload.setUid(UID);
   payload.setDestinationAddress(ip_receiver);
