@@ -221,15 +221,15 @@ int main (int argc, char *argv[]){
   double distance = 150;  // m
   //uint32_t packetSize = 1000; // bytes
   uint32_t numPackets = 1;
-  uint32_t gridWidth = 10;
+  //uint32_t gridWidth = 10;
   uint32_t numNodes = 50;  // by default, 5x5
   uint32_t sinkNode = 0;
-  uint32_t sourceNode = 6;
+  uint32_t sourceNode = 13;
   double interval = 25.0; // seconds
   bool verbose = false;
   bool tracing = false;
 
-  uint32_t TTL = 6;
+  uint32_t TTL = 12;
   uint32_t UID = 0;
 
   double rss = -80;  // -dBm
@@ -258,7 +258,7 @@ int main (int argc, char *argv[]){
   NodeContainer c;
   c.Create (numNodes);
 
-  SeedManager::SetSeed (167);
+  SeedManager::SetSeed (123);
 
   // The below set of helpers will help us to put together the wifi NICs we want
   WifiHelper wifi;
@@ -267,7 +267,7 @@ int main (int argc, char *argv[]){
   // FROM WIFI SIMPLE ADHOC GRID
 
   // set it to zero; otherwise, gain will be added
-  wifiPhy.Set ("RxGain", DoubleValue (-5) );
+  wifiPhy.Set ("RxGain", DoubleValue (-25) );
   // ns-3 supports RadioTap and Prism tracing extensions for 802.11b
   wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
 
@@ -326,15 +326,15 @@ int main (int argc, char *argv[]){
   */
  	
   mobility.SetPositionAllocator ("ns3::RandomDiscPositionAllocator",
-                                "X", StringValue ("300.0"),
-                                "Y", StringValue ("300.0"),
-                                "Rho", StringValue ("ns3::UniformRandomVariable[Min=0|Max=30]"));
+                                "X", StringValue ("50.0"),
+                                "Y", StringValue ("100.0"),
+                                "Rho", StringValue ("ns3::UniformRandomVariable[Min=10|Max=50]"));
   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
                            	"Mode", StringValue ("Time"),
-                            "Time", StringValue ("2s"),
+                            "Time", StringValue ("1s"),
                             "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"),
-                            "Bounds", StringValue ("0|1000|0|1000"));
-
+                            "Bounds", RectangleValue (Rectangle (-200, 200, -200, 200))
+                            );
   mobility.InstallAll();
 
   InternetStackHelper internet;
@@ -375,8 +375,10 @@ int main (int argc, char *argv[]){
   Simulator::Schedule (Seconds (30.0), &GenerateTraffic,
                        source, packet, UID);
 
-  int x=0, y=0;
   AnimationInterface anim("adhoc-grid.xml");
+  /*
+  int x=0, y=0;
+  
   for(uint32_t i=0; i<numNodes; ++i){
       if((i != 0) && (i % gridWidth == 0)) {
         x = 0;
@@ -385,7 +387,7 @@ int main (int argc, char *argv[]){
       anim.SetConstantPosition(c.Get(i), x, y);
       x = x+distance;
   }
-  
+  */
   anim.UpdateNodeDescription(c.Get(sourceNode),"Sender");
   anim.UpdateNodeDescription(c.Get(sinkNode),"Receiver");
 
