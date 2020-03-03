@@ -216,7 +216,7 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UI
    
   if(nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID) == false or //stack of sent pkt
     (nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID) == true and //stack of sent pkt
-      (previousAddress_uid.empty() or nodeHandlerArray[socket->GetNode()->GetId()].countInReceived(previousAddress_uid) < 2))   //stack of received pkt
+      (nodeHandlerArray[socket->GetNode()->GetId()].countInReceived(previousAddress_uid) < 2))   //stack of received pkt
     ){
     NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << "\tGoing to send packet");
     socket->Send (packet);
@@ -261,7 +261,7 @@ void ReceivePacket (Ptr<Socket> socket){
 
     if (nodeHandlerArray[socket->GetNode()->GetId()].searchInReceived(previousAddress_uid) == false){nodeHandlerArray[socket->GetNode()->GetId()].pushInReceived(ip_sender,UID);}
     
-    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID << " and TTL " << TTL << " from: " << ip_sender << " to: " << destinationAddress);
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "  " << socket->GetNode()->GetId() << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID << " and TTL " << TTL << " from: " << ip_sender << " to: " << destinationAddress);
 
     if(ip_receiver != destinationAddress) {
       if(TTL != 0){
@@ -299,9 +299,9 @@ int main (int argc, char *argv[]){
   std::string phyMode ("DsssRate1Mbps");
   double distance = 150;  // m
   //uint32_t packetSize = 1000; // bytes
-  uint32_t numPackets = 1;
+  uint32_t numPackets = 2;
   //uint32_t gridWidth = 10;
-  uint32_t numNodes = 50;  // by default, 5x5
+  uint32_t numNodes = 80;  // by default, 50
   uint32_t sinkNode = 45;
   uint32_t sourceNode = 44;
   double interval = 25.0; // seconds
@@ -413,7 +413,7 @@ int main (int argc, char *argv[]){
   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
                            	"Mode", StringValue ("Time"),
                             "Time", StringValue ("15s"),
-                            "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=10.0]"),
+                            "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=10.0]"),// 36 km/h
                             "Bounds", StringValue ("0|10000|0|10000"));
 
   mobility.InstallAll();
@@ -446,15 +446,38 @@ int main (int argc, char *argv[]){
 
   Ipv4InterfaceAddress iaddr = c.Get(sinkNode)->GetObject<Ipv4>()->GetAddress (1,0);
   Ipv4Address ip_receiver = iaddr.GetLocal ();
+ 
+  Ipv4InterfaceAddress iaddrSender = c.Get(sourceNode)->GetObject<Ipv4>()->GetAddress (1,0);
+  Ipv4Address ip_sender = iaddrSender.GetLocal ();
   
   PayLoadConstructor payload = PayLoadConstructor(EPIDEMIC);
   payload.setTtl(TTL);
   payload.setUid(UID);
   payload.setDestinationAddress(ip_receiver);
   Ptr<Packet> packet = payload.toPacket();
+  
+  std::ostringstream value; 
+  value << ip_sender << ";" << UID;
 
-  Simulator::Schedule (Seconds (30.0), &GenerateTraffic,
-                       source, packet, UID, "");
+  Simulator::Schedule (Seconds (0.0), &GenerateTraffic,
+                       source, packet, UID, value.str());
+
+  uint32_t TTL1 = 8;
+  uint32_t UID1 = 1;
+
+  PayLoadConstructor payload1 = PayLoadConstructor(EPIDEMIC);
+  payload1.setTtl(TTL1);
+  payload1.setUid(UID1);
+  payload1.setDestinationAddress(ip_receiver);
+  Ptr<Packet> packet1 = payload1.toPacket();
+  
+  std::ostringstream value1; 
+  value1 << ip_sender << ";" << UID1;
+
+  Simulator::Schedule (Seconds (300.0), &GenerateTraffic,
+                       source, packet1, UID1, value1.str());
+
+
 
   //int x=0, y=0;
   AnimationInterface anim("adhoc-grid.xml");
