@@ -33,6 +33,14 @@ enum {
 	PROPHET
 };
 
+typedef struct{
+  boolean delivered;
+  double start;
+  double delivered_at;
+} PacketLogData
+
+std::vector<PacketLogData> dataForPackets;
+
 std::vector<std::string> splitString(str::sting value, std::string delimiter){
   std::vector<std::string> values;
   int pos = 0;
@@ -204,9 +212,10 @@ class NodeHandler{
 std::vector<NodeHandler> nodeHandlerArray;
 
 static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UID, std::string previousAddressUid){
-  // Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
-  // Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
-  // Ipv4Address ipSender = iaddr.GetLocal ();
+  Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
+  Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
+  Ipv4Address ipSender = iaddr.GetLocal ();
+
   NodeHandler currentNode = nodeHandlerArray[socket->GetNode()->GetId()];
 
   if(currentNode.searchInStack(UID) == false || //stack of sent pkt
@@ -214,7 +223,11 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UI
       (currentNode.countInReceived(previousAddressUid) < 2))   //stack of received pkt
     ){
     NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << "\tGoing to send packet");
+
     socket->Send (packet);
+    if(previousAddressUid.compare(stringAddressUid(ipSender, (int)UID, ";")) == 0)
+      dataForPackets[UID].start = Simulator::Now().GetSeconds();
+
     currentNode.pushInStack(UID);
     currentNode.increaseBytesSent((double)packet->GetSize());
     currentNode.increasePacketsSent(1);
@@ -251,7 +264,7 @@ void ReceivePacket (Ptr<Socket> socket){
     uint32_t UID = payload.getUid();
     uint32_t TTL = payload.getTtl();
 
-    std::string previousAddressUid = stringAddressUid(destinationAddress, UID, ";");
+    std::string previousAddressUid = stringAddressUid(destinationAddress, (int)UID, ";");
 
     if (currentNode.searchInReceived(previousAddressUid) == false) currentNode.pushInReceived(ipSender, UID);
 
@@ -280,6 +293,10 @@ void ReceivePacket (Ptr<Socket> socket){
       } // else NS_LOG_UNCOND("TTL Scaduto");
     } else {
       NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<" I am " << ipReceiver << " finally received the package with uid: " << UID );
+      if (dataForPackets[UID].delivered != true){  // Prevent multiple logs for the same pkg receiver more times
+        dataForPackets[UID].delivered = true;
+        dataForPackets[UID].delivered_at = Simulator::Now().GetSeconds();
+      }
       // socket->Close ();
     }
   }
@@ -441,15 +458,16 @@ int main (int argc, char *argv[]){
   Ipv4Address ipSender = iaddrSender.GetLocal ();
 
   PayLoadConstructor payload;
-  for (int uint32_t = 0; i < numPackets; i++){
+  for (uint32_t = 0; i < numPackets; i++){
     payload = PayLoadConstructor(EPIDEMIC);
     payload.setTtl(TTL);
     payload.setUid(UID);
     payload.setDestinationAddress(ipReceiver);
     Ptr<Packet> packet = payload.toPacket();
 
+    dataForPackets.push_back(PacketLogData = {false, 0.00, 0.00});
     Simulator::Schedule(Seconds(300 * i), &GenerateTraffic,
-                        source, packet, UID, stringAddressUid(ipSender, UID, ";"));
+                        source, packet, UID, stringAddressUid(ipSender, (int)UID, ";"));
 
     UID += 1;
   }
@@ -467,6 +485,7 @@ int main (int argc, char *argv[]){
       x = x+distance;
   }
   */
+
   anim.UpdateNodeDescription(c.Get(sourceNode),"Sender");
   anim.UpdateNodeDescription(c.Get(sinkNode),"Receiver");
 
@@ -475,11 +494,33 @@ int main (int argc, char *argv[]){
   Simulator::Run ();
   Simulator::Destroy ();
 
-  /*
-  for(uint32_t i=0; i<numNodes; ++i){
-      NS_LOG_UNCOND("Il nodo: " << i << " ha inviato: " << nodeHandlerArray[i].getPacketsSent() << " pacchetti per " << nodeHandlerArray[i].getBytesSent() << "bytes.");
+  int deliveredCounter = 0;
+  for (int i = 0; i < dataForPackets.size(); i++){
+    if(dataForPackets[i].delivered == true) deliveredCounter++;
   }
-  */
+  NS_LOG_UNCOND("- Packets sent: \t" << dataForPackets.size());
+  NS_LOG_UNCOND("- Packets delivered: \t" << deliveredCounter);
+  NS_LOG_UNCOND("- Delivery percentage: \t" << (deliveredCounter / dataForPackets.size()) * 100 << "%");
+  // Delivery time (?) (?) (?)
+
+  double totalBytesSent = 0.00;
+  double totalBytesReceived = 0.00;
+  int totalPacketsSent = 0;
+  int totalPacketsReceived = 0;
+  int totalAttempt = 0;
+  for (uint32_t i = 0; i < numNodes; ++i){
+    totalBytesSent += nodeHandlerArray[i].getBytesSent();
+    totalBytesReceived += nodeHandlerArray[i].getBytesReceived();
+    totalPacketsSent += nodeHandlerArray[i].getPacketsSent();
+    totalPacketsReceived += nodeHandlerArray[i].getPacketsReceived();
+    totalAttempt += nodeHandlerArray[i].getAttempt();
+  }
+
+  NS_LOG_UNCOND("- Total BytesSent: \t" << totalBytesSent);
+  NS_LOG_UNCOND("- Total BytesReceived: \t" << totalBytesReceived);
+  NS_LOG_UNCOND("- Total PacketsSent: \t" << totalPacketsSent);
+  NS_LOG_UNCOND("- Total PacketsReceived: \t" << totalPacketsReceived);
+  NS_LOG_UNCOND("- Total Attempt: \t" << totalAttempt);
 
   return 0;
 }
