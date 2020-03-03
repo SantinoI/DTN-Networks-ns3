@@ -1,4 +1,5 @@
-
+//TODO: try with different Time in RandomWalk2dMobilityModel like 60s or so
+//TODO: try to develop with 2 different receiver(hack sender) instead of 2 times received(hack)
 #include <stack> 
 #include <vector> 
 #include <algorithm>
@@ -100,25 +101,34 @@ class PayLoadConstructor{
 class NodeHandler{
   private:
     double bytesSent;
-    double packetsSent;
+    int packetsSent;
     double bytesReceived;
-	double packetsReceived;
+    int packetsReceived;
+    int attempt;
     std::stack<uint64_t> packetsScheduled;
+    std::stack<uint64_t> uidsPacketReceived;
+
     // Next routing table values    
   
   public:
     NodeHandler(){
       bytesSent = 0.00;
-      packetsSent = 0.00;
+      packetsSent = 0;
+      bytesReceived = 0.0;
+      packetsReceived = 0;
+      attempt = 0;
     }
-    int getBytesSent(){ return bytesSent; }
+    double getBytesSent(){ return bytesSent; }
     int getPacketsSent(){ return packetsSent; }
 
     void setBytesSent(double value){ bytesSent = value; }
     void setPacketsSent(double value){ packetsSent = value; }
 
-    int getBytesReceived(){ return bytesReceived; }
+    double getBytesReceived(){ return bytesReceived; }
     int getPacketsReceived(){ return packetsReceived; }
+
+    void incrementAttempt(){attempt++}
+    int getAttempt(){return attempt}
 
     void setBytesReceived(double value){ bytesReceived = value; }
     void setPacketsReceived(double value){ packetsReceived = value; }
@@ -128,17 +138,32 @@ class NodeHandler{
     void increaseBytesReceived(double value){ bytesReceived += value; }
     void increasePacketsReceived(double value){ packetsReceived += value; }
 
-    bool searchInStack(uint64_t value){
-      std::stack<uint64_t> s = packetsScheduled;  // Create a copy for pop
-      while (!s.empty()) { 
-        uint64_t top = s.top();
-        if(value == top) return true; 
-        s.pop(); 
-      } 
-      return false; 
+    int searchInStack(uint64_t value, bool received_search){
+      std::stack<uint64_t> s;// Create a copy for pop
+      if(received_search){
+        s = uidsPacketReceived;
+        int counter = 0;
+        while (!s.empty()) { 
+          uint64_t top = s.top();
+          if(value == top) counter++; 
+          s.pop(); 
+        } 
+        return counter;
+      } else {
+        s = packetsScheduled;
+        while (!s.empty()) { 
+          uint64_t top = s.top();
+          if(value == top) return 1; 
+          s.pop(); 
+        } 
+        return 0;
+      }
+       
     }
     void pushInStack(uint64_t value){ packetsScheduled.push(value); }
+    void pushInReceived(uint64_t value){ uidsPacketReceived.push(value); }
     void popFromStack(){ packetsScheduled.pop(); }
+    void popFromReceived(){ uidsPacketReceived.pop(); }
 };
 
 std::vector<NodeHandler> nodeHandlerArray;
@@ -148,11 +173,20 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UI
   // Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
   // Ipv4Address ip_sender = iaddr.GetLocal (); 
 
-  // NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ip_sender << "\tGoing to send packet");
-  socket->Send (packet);
-  nodeHandlerArray[socket->GetNode()->GetId()].pushInStack(UID);
-  nodeHandlerArray[socket->GetNode()->GetId()].increaseBytesSent((double)packet->GetSize());
-  nodeHandlerArray[socket->GetNode()->GetId()].increasePacketsSent(1);
+   
+  if(nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID,false) == 0 or //stack of sent pkt
+    (nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID,false) == 1 and //stack of sent pkt
+      nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID,true) < 2)   //stack of received pkt
+    ){
+    NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << "\tGoing to send packet");
+    socket->Send (packet);
+    nodeHandlerArray[socket->GetNode()->GetId()].pushInStack(UID);
+    nodeHandlerArray[socket->GetNode()->GetId()].increaseBytesSent((double)packet->GetSize());
+    nodeHandlerArray[socket->GetNode()->GetId()].increasePacketsSent(1);
+
+    Simulator::Schedule (Seconds(60), &GenerateTraffic, socket, packet, UID);
+  }
+  
   // socket->Close ();
 }
 
@@ -164,8 +198,9 @@ void ReceivePacket (Ptr<Socket> socket){
 
   while (pkt = socket->RecvFrom(from)){ 
 
-	nodeHandlerArray[socket->GetNode()->GetId()].increaseBytesReceived((double)pkt->GetSize());
+    nodeHandlerArray[socket->GetNode()->GetId()].increaseBytesReceived((double)pkt->GetSize());
   	nodeHandlerArray[socket->GetNode()->GetId()].increasePacketsReceived(1);
+
 
     ip_sender = InetSocketAddress::ConvertFrom (from).GetIpv4 ();
 
@@ -181,12 +216,14 @@ void ReceivePacket (Ptr<Socket> socket){
     uint32_t TTL = payload.getTtl();
     Ipv4Address destinationAddress = payload.getDestinationAddress();
     
+    nodeHandlerArray[socket->GetNode()->GetId()].pushInReceived(UID);
+    
     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID << " and TTL " << TTL << " from: " << ip_sender << " to: " << destinationAddress);
 
 
     if(ip_receiver != destinationAddress) {
       if(TTL != 0){
-        if (nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID) == false){
+        if (nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID,false) == false){
               InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80); 
               socket->SetAllowBroadcast (true);
               socket->Connect (remote);
@@ -209,7 +246,7 @@ void ReceivePacket (Ptr<Socket> socket){
         }
       } // else NS_LOG_UNCOND("TTL Scaduto");
     } else {
-      NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<" I am " << ip_receiver << " finally receiverd the package with uid: " << UID );
+      NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<" I am " << ip_receiver << " finally received the package with uid: " << UID );
       // socket->Close ();
     }
   } 
@@ -221,15 +258,15 @@ int main (int argc, char *argv[]){
   double distance = 150;  // m
   //uint32_t packetSize = 1000; // bytes
   uint32_t numPackets = 1;
-  //uint32_t gridWidth = 10;
+  uint32_t gridWidth = 10;
   uint32_t numNodes = 50;  // by default, 5x5
-  uint32_t sinkNode = 0;
-  uint32_t sourceNode = 13;
+  uint32_t sinkNode = 45;
+  uint32_t sourceNode = 44;
   double interval = 25.0; // seconds
   bool verbose = false;
   bool tracing = false;
 
-  uint32_t TTL = 12;
+  uint32_t TTL = 6;
   uint32_t UID = 0;
 
   double rss = -80;  // -dBm
@@ -258,7 +295,7 @@ int main (int argc, char *argv[]){
   NodeContainer c;
   c.Create (numNodes);
 
-  SeedManager::SetSeed (123);
+  SeedManager::SetSeed (167);
 
   // The below set of helpers will help us to put together the wifi NICs we want
   WifiHelper wifi;
@@ -267,7 +304,8 @@ int main (int argc, char *argv[]){
   // FROM WIFI SIMPLE ADHOC GRID
 
   // set it to zero; otherwise, gain will be added
-  wifiPhy.Set ("RxGain", DoubleValue (-25) );
+  wifiPhy.Set ("RxGain", DoubleValue (-1) );
+  wifiPhy.Set ("TxGain", DoubleValue (-1) );
   // ns-3 supports RadioTap and Prism tracing extensions for 802.11b
   wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
 
@@ -326,15 +364,16 @@ int main (int argc, char *argv[]){
   */
  	
   mobility.SetPositionAllocator ("ns3::RandomDiscPositionAllocator",
-                                "X", StringValue ("50.0"),
-                                "Y", StringValue ("100.0"),
-                                "Rho", StringValue ("ns3::UniformRandomVariable[Min=10|Max=50]"));
+                                "X", StringValue ("5000.0"),
+                                "Y", StringValue ("5000.0"),
+                                "Theta", StringValue ("ns3::UniformRandomVariable[Min=-1000.0|Max=1000.0]"),
+                                "Rho", StringValue ("ns3::UniformRandomVariable[Min=1000.0|Max=5000.0]"));
   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
                            	"Mode", StringValue ("Time"),
-                            "Time", StringValue ("1s"),
-                            "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"),
-                            "Bounds", RectangleValue (Rectangle (-200, 200, -200, 200))
-                            );
+                            "Time", StringValue ("15s"),
+                            "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=10.0]"),
+                            "Bounds", StringValue ("0|10000|0|10000"));
+
   mobility.InstallAll();
 
   InternetStackHelper internet;
@@ -375,11 +414,9 @@ int main (int argc, char *argv[]){
   Simulator::Schedule (Seconds (30.0), &GenerateTraffic,
                        source, packet, UID);
 
+  //int x=0, y=0;
   AnimationInterface anim("adhoc-grid.xml");
-  /*
-  int x=0, y=0;
-  
-  for(uint32_t i=0; i<numNodes; ++i){
+/*  for(uint32_t i=0; i<numNodes; ++i){
       if((i != 0) && (i % gridWidth == 0)) {
         x = 0;
         y += distance;
@@ -391,7 +428,7 @@ int main (int argc, char *argv[]){
   anim.UpdateNodeDescription(c.Get(sourceNode),"Sender");
   anim.UpdateNodeDescription(c.Get(sinkNode),"Receiver");
 
-  Simulator::Stop (Seconds (900.0));
+  Simulator::Stop (Seconds (7230.0));
   
   Simulator::Run ();
   Simulator::Destroy ();
