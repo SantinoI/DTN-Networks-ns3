@@ -1,7 +1,7 @@
 //TODO: try with different Time in RandomWalk2dMobilityModel like 60s or so
 //TODO: try to develop with 2 different receiver(hack sender) instead of 2 times received(hack)
-#include <stack> 
-#include <vector> 
+#include <stack>
+#include <vector>
 #include <algorithm>
 
 #include "ns3/core-module.h"
@@ -80,21 +80,21 @@ class PayLoadConstructor{
       uint8_t *buffer = new uint8_t[packet->GetSize ()];
       packet->CopyData(buffer, packet->GetSize ());
       std::string stringPayload = std::string((char*)buffer);
-     
+
       fromString(stringPayload);
     };
 
     std::ostringstream toString(){
-      std::ostringstream msg; 
+      std::ostringstream msg;
       msg << destinationAddress << delimiter << ttl << delimiter << uid;
-      return msg;              
+      return msg;
     };
 
     Ptr<Packet> toPacket(){
       std::ostringstream msg = toString();
       uint32_t packetSize = msg.str().length()+1;
       Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
-      return packet;        
+      return packet;
     }
 };
 
@@ -108,8 +108,8 @@ class NodeHandler{
     std::stack<uint64_t> packetsScheduled;
     std::stack<std::string> uidsPacketReceived;
 
-    // Next routing table values    
-  
+    // Next routing table values
+
   public:
     NodeHandler(){
       bytesSent = 0.00;
@@ -140,11 +140,11 @@ class NodeHandler{
 
     bool searchInStack(uint64_t value){
         std::stack<uint64_t> s = packetsScheduled;
-        while (!s.empty()) { 
+        while (!s.empty()) {
           uint64_t top = s.top();
-          if(value == top) return true; 
-          s.pop(); 
-        } 
+          if(value == top) return true;
+          s.pop();
+        }
         return false;
       }
     int countInReceived(std::string value){
@@ -161,12 +161,12 @@ class NodeHandler{
           iterationCounter++;
       }
       uid = std:: stoi(value);
-      
+
 
       std::stack<std::string> s = uidsPacketReceived;
 
       int counter = 0;
-      while (!s.empty()) { 
+      while (!s.empty()) {
         std::string top = s.top();
         pos = 0;
         iterationCounter = 0;
@@ -180,24 +180,24 @@ class NodeHandler{
         }
         tempUid = std:: stoi(value);
         if( uid == tempUid ) counter++;
-        s.pop(); 
-      } 
+        s.pop();
+      }
       return counter;
     }
     bool searchInReceived(std::string value){
       std::stack<std::string> s = uidsPacketReceived;
 
-      while (!s.empty()) { 
+      while (!s.empty()) {
         std::string top = s.top();
         if( top == value) return true;
-        s.pop(); 
-      } 
+        s.pop();
+      }
       return false;
     }
 
     void pushInStack(uint64_t value){ packetsScheduled.push(value); }
-    std::string pushInReceived(ns3::Ipv4Address previousAddress,int uid){ 
-      std::ostringstream value; 
+    std::string pushInReceived(ns3::Ipv4Address previousAddress,int uid){
+      std::ostringstream value;
       value << previousAddress << ";" << uid;
       uidsPacketReceived.push(value.str());
       return value.str();
@@ -211,9 +211,9 @@ std::vector<NodeHandler> nodeHandlerArray;
 static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UID, std::string previousAddress_uid){
   // Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
   // Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
-  // Ipv4Address ip_sender = iaddr.GetLocal (); 
+  // Ipv4Address ip_sender = iaddr.GetLocal ();
 
-   
+
   if(nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID) == false or //stack of sent pkt
     (nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID) == true and //stack of sent pkt
       (nodeHandlerArray[socket->GetNode()->GetId()].countInReceived(previousAddress_uid) < 2))   //stack of received pkt
@@ -226,17 +226,17 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UI
 
     Simulator::Schedule (Seconds(60), &GenerateTraffic, socket, packet, UID, previousAddress_uid);
   }
-  
+
   // socket->Close ();
 }
 
 
-void ReceivePacket (Ptr<Socket> socket){ 
+void ReceivePacket (Ptr<Socket> socket){
   Address from;
   Ipv4Address ip_sender;
   Ptr<Packet> pkt;
 
-  while (pkt = socket->RecvFrom(from)){ 
+  while (pkt = socket->RecvFrom(from)){
 
     nodeHandlerArray[socket->GetNode()->GetId()].increaseBytesReceived((double)pkt->GetSize());
   	nodeHandlerArray[socket->GetNode()->GetId()].increasePacketsReceived(1);
@@ -246,7 +246,7 @@ void ReceivePacket (Ptr<Socket> socket){
 
     Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
     Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
-    Ipv4Address ip_receiver = iaddr.GetLocal (); 
+    Ipv4Address ip_receiver = iaddr.GetLocal ();
 
     PayLoadConstructor payload = PayLoadConstructor(EPIDEMIC);
     payload.fromPacket(pkt);
@@ -255,33 +255,33 @@ void ReceivePacket (Ptr<Socket> socket){
     uint32_t UID = payload.getUid();
     uint32_t TTL = payload.getTtl();
     Ipv4Address destinationAddress = payload.getDestinationAddress();
-    std::ostringstream value; 
+    std::ostringstream value;
     value << ip_sender << ";" << UID;
     std::string previousAddress_uid = value.str();
 
     if (nodeHandlerArray[socket->GetNode()->GetId()].searchInReceived(previousAddress_uid) == false){nodeHandlerArray[socket->GetNode()->GetId()].pushInReceived(ip_sender,UID);}
-    
+
     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "  " << socket->GetNode()->GetId() << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID << " and TTL " << TTL << " from: " << ip_sender << " to: " << destinationAddress);
 
     if(ip_receiver != destinationAddress) {
       if(TTL != 0){
         if (nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID) == false){
-              InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80); 
+              InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80);
               socket->SetAllowBroadcast (true);
               socket->Connect (remote);
-              
+
               // Update packet with new TTL
               // std::ostringstream msg; msg << destinationAddress << ';' << TTL << ";"<< UID;
               // uint32_t packetSize = msg.str().length()+1;
               Ptr<Packet> packet = payload.toPacket();
               NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ip_sender << "\tGoing to send packet with uid: " << UID << " and TTL " << TTL );
-  
+
               Ptr<UniformRandomVariable> x = CreateObject<UniformRandomVariable> ();
               double randomPause = x->GetValue(0.1, 1.0);
               // NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\tNodo numero: " << socket->GetNode()->GetId() << " attesa di " << randomPause );
               Simulator::Schedule (Seconds(randomPause), &GenerateTraffic,
                                   socket, packet, UID, previousAddress_uid);
-        
+
         } else {
           NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tI've already scheduled the message with uid: " << UID);
           // socket->Close ();
@@ -291,7 +291,7 @@ void ReceivePacket (Ptr<Socket> socket){
       NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<" I am " << ip_receiver << " finally received the package with uid: " << UID );
       // socket->Close ();
     }
-  } 
+  }
 }
 
 
@@ -385,7 +385,7 @@ int main (int argc, char *argv[]){
   MobilityHelper mobility;
 
   /*
-   * WITHOUT GRID 
+   * WITHOUT GRID
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
   positionAlloc->Add (Vector (0.0, 0.0, 0.0));
   positionAlloc->Add (Vector (5.0, 0.0, 0.0));
@@ -404,7 +404,7 @@ int main (int argc, char *argv[]){
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (c);
   */
- 	
+
   mobility.SetPositionAllocator ("ns3::RandomDiscPositionAllocator",
                                 "X", StringValue ("5000.0"),
                                 "Y", StringValue ("5000.0"),
@@ -419,7 +419,6 @@ int main (int argc, char *argv[]){
   mobility.InstallAll();
 
   InternetStackHelper internet;
-  // internet.SetRoutingHelper (list); // has effect on the next Install ()
   internet.Install (c);
 
   Ipv4AddressHelper ipv4;
@@ -446,42 +445,32 @@ int main (int argc, char *argv[]){
 
   Ipv4InterfaceAddress iaddr = c.Get(sinkNode)->GetObject<Ipv4>()->GetAddress (1,0);
   Ipv4Address ip_receiver = iaddr.GetLocal ();
- 
+
   Ipv4InterfaceAddress iaddrSender = c.Get(sourceNode)->GetObject<Ipv4>()->GetAddress (1,0);
   Ipv4Address ip_sender = iaddrSender.GetLocal ();
-  
-  PayLoadConstructor payload = PayLoadConstructor(EPIDEMIC);
-  payload.setTtl(TTL);
-  payload.setUid(UID);
-  payload.setDestinationAddress(ip_receiver);
-  Ptr<Packet> packet = payload.toPacket();
-  
-  std::ostringstream value; 
-  value << ip_sender << ";" << UID;
 
-  Simulator::Schedule (Seconds (0.0), &GenerateTraffic,
-                       source, packet, UID, value.str());
+  PayLoadConstructor payload;
+  for (int uint32_t = 0; i < numPackets; i++){
+    payload = PayLoadConstructor(EPIDEMIC);
+    payload.setTtl(TTL);
+    payload.setUid(UID);
+    payload.setDestinationAddress(ip_receiver);
+    Ptr<Packet> packet = payload.toPacket();
 
-  uint32_t TTL1 = 8;
-  uint32_t UID1 = 1;
+    std::ostringstream value;
+    value << ip_sender << ";" << UID;
 
-  PayLoadConstructor payload1 = PayLoadConstructor(EPIDEMIC);
-  payload1.setTtl(TTL1);
-  payload1.setUid(UID1);
-  payload1.setDestinationAddress(ip_receiver);
-  Ptr<Packet> packet1 = payload1.toPacket();
-  
-  std::ostringstream value1; 
-  value1 << ip_sender << ";" << UID1;
+    Simulator::Schedule(Seconds(300 * i), &GenerateTraffic,
+                        source, packet, UID, value.str());
 
-  Simulator::Schedule (Seconds (300.0), &GenerateTraffic,
-                       source, packet1, UID1, value1.str());
+    UID += 1;
+  }
 
-
-
-  //int x=0, y=0;
   AnimationInterface anim("adhoc-grid.xml");
-/*  for(uint32_t i=0; i<numNodes; ++i){
+
+  /*
+    int x=0, y=0;
+    for(uint32_t i=0; i<numNodes; ++i){
       if((i != 0) && (i % gridWidth == 0)) {
         x = 0;
         y += distance;
@@ -494,7 +483,7 @@ int main (int argc, char *argv[]){
   anim.UpdateNodeDescription(c.Get(sinkNode),"Receiver");
 
   Simulator::Stop (Seconds (7230.0));
-  
+
   Simulator::Run ();
   Simulator::Destroy ();
 
