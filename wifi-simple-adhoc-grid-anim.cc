@@ -206,7 +206,7 @@ std::vector<NodeHandler> nodeHandlerArray;
 static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UID, std::string previousAddressUid){
   // Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
   // Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
-  // Ipv4Address ip_sender = iaddr.GetLocal ();
+  // Ipv4Address ipSender = iaddr.GetLocal ();
   NodeHandler currentNode = nodeHandlerArray[socket->GetNode()->GetId()];
 
   if(currentNode.searchInStack(UID) == false || //stack of sent pkt
@@ -228,7 +228,7 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UI
 
 void ReceivePacket (Ptr<Socket> socket){
   Address from;
-  Ipv4Address ip_sender;
+  Ipv4Address ipSender;
   Ptr<Packet> pkt;
 
   while (pkt = socket->RecvFrom(from)){
@@ -238,11 +238,11 @@ void ReceivePacket (Ptr<Socket> socket){
     currentNode.increaseBytesReceived((double)pkt->GetSize());
   	currentNode.increasePacketsReceived(1);
 
-    ip_sender = InetSocketAddress::ConvertFrom (from).GetIpv4 ();
+    ipSender = InetSocketAddress::ConvertFrom (from).GetIpv4 ();
 
     Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
     Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
-    Ipv4Address ip_receiver = iaddr.GetLocal ();
+    Ipv4Address ipReceiver = iaddr.GetLocal ();
 
     PayLoadConstructor payload = PayLoadConstructor(EPIDEMIC);
     payload.fromPacket(pkt);
@@ -253,22 +253,19 @@ void ReceivePacket (Ptr<Socket> socket){
 
     std::string previousAddressUid = stringAddressUid(destinationAddress, UID, ";");
 
-    if (currentNode.searchInReceived(previousAddressUid) == false) currentNode.pushInReceived(ip_sender, UID);
+    if (currentNode.searchInReceived(previousAddressUid) == false) currentNode.pushInReceived(ipSender, UID);
 
-    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "  " << socket->GetNode()->GetId() << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID << " and TTL " << TTL << " from: " << ip_sender << " to: " << destinationAddress);
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ipReceiver << "  " << socket->GetNode()->GetId() << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID << " and TTL " << TTL << " from: " << ipSender << " to: " << destinationAddress);
 
-    if(ip_receiver != destinationAddress) {
+    if(ipReceiver != destinationAddress) {
       if(TTL != 0){
         if (currentNode.searchInStack(UID) == false){
               InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80);
               socket->SetAllowBroadcast (true);
               socket->Connect (remote);
 
-              // Update packet with new TTL
-              // std::ostringstream msg; msg << destinationAddress << ';' << TTL << ";"<< UID;
-              // uint32_t packetSize = msg.str().length()+1;
               Ptr<Packet> packet = payload.toPacket();
-              NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ip_sender << "\tGoing to send packet with uid: " << UID << " and TTL " << TTL );
+              NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ipSender << "\tGoing to send packet with uid: " << UID << " and TTL " << TTL );
 
               Ptr<UniformRandomVariable> x = CreateObject<UniformRandomVariable> ();
               double randomPause = x->GetValue(0.1, 1.0);
@@ -277,12 +274,12 @@ void ReceivePacket (Ptr<Socket> socket){
                                   socket, packet, UID, previousAddressUid);
 
         } else {
-          NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tI've already scheduled the message with uid: " << UID);
+          NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ipReceiver << "\tI've already scheduled the message with uid: " << UID);
           // socket->Close ();
         }
       } // else NS_LOG_UNCOND("TTL Scaduto");
     } else {
-      NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<" I am " << ip_receiver << " finally received the package with uid: " << UID );
+      NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<" I am " << ipReceiver << " finally received the package with uid: " << UID );
       // socket->Close ();
     }
   }
@@ -291,10 +288,10 @@ void ReceivePacket (Ptr<Socket> socket){
 
 int main (int argc, char *argv[]){
   std::string phyMode ("DsssRate1Mbps");
-  double distance = 150;  // m
-  //uint32_t packetSize = 1000; // bytes
-  uint32_t numPackets = 2;
   //uint32_t gridWidth = 10;
+
+  double distance = 150;  // m
+  uint32_t numPackets = 2;
   uint32_t numNodes = 80;  // by default, 50
   uint32_t sinkNode = 45;
   uint32_t sourceNode = 44;
@@ -310,7 +307,6 @@ int main (int argc, char *argv[]){
   CommandLine cmd;
   cmd.AddValue ("phyMode", "Wifi Phy mode", phyMode);
   cmd.AddValue ("distance", "distance (m)", distance);
-  //cmd.AddValue ("packetSize", "size of application packet sent", packetSize);
   cmd.AddValue ("numPackets", "number of packets generated", numPackets);
   cmd.AddValue ("interval", "interval (seconds) between packets", interval);
   cmd.AddValue ("verbose", "turn on all WifiNetDevice log components", verbose);
@@ -318,6 +314,7 @@ int main (int argc, char *argv[]){
   cmd.AddValue ("numNodes", "number of nodes", numNodes);
   cmd.AddValue ("sinkNode", "Receiver node number", sinkNode);
   cmd.AddValue ("sourceNode", "Sender node number", sourceNode);
+  cmd.AddValue ("TTL", "TTL For each packet", TTL);
 
   cmd.AddValue ("rss", "received signal strength", rss);
   cmd.Parse (argc, argv);
@@ -438,21 +435,21 @@ int main (int argc, char *argv[]){
   source->Connect (remote);
 
   Ipv4InterfaceAddress iaddr = c.Get(sinkNode)->GetObject<Ipv4>()->GetAddress (1,0);
-  Ipv4Address ip_receiver = iaddr.GetLocal ();
+  Ipv4Address ipReceiver = iaddr.GetLocal ();
 
   Ipv4InterfaceAddress iaddrSender = c.Get(sourceNode)->GetObject<Ipv4>()->GetAddress (1,0);
-  Ipv4Address ip_sender = iaddrSender.GetLocal ();
+  Ipv4Address ipSender = iaddrSender.GetLocal ();
 
   PayLoadConstructor payload;
   for (int uint32_t = 0; i < numPackets; i++){
     payload = PayLoadConstructor(EPIDEMIC);
     payload.setTtl(TTL);
     payload.setUid(UID);
-    payload.setDestinationAddress(ip_receiver);
+    payload.setDestinationAddress(ipReceiver);
     Ptr<Packet> packet = payload.toPacket();
 
     Simulator::Schedule(Seconds(300 * i), &GenerateTraffic,
-                        source, packet, UID, stringAddressUid(ip_sender, UID, ";"));
+                        source, packet, UID, stringAddressUid(ipSender, UID, ";"));
 
     UID += 1;
   }
