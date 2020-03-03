@@ -1,0 +1,21 @@
+- percentuale di consegna con numero nodi variabili [Y: 0%-100% delivery][X: numero nodi 15-20-30-40-50-70-90] TTL=6 (fisso) dimensioni mappa fisse (quelle che ci sono già)
+
+- tempi di consegna con numero nodi variabili [Y: tempo start - parziale pkt1 - ... - parziale pkt n tempo delivery][X: numero nodi 15-20-30-40-50-70-90] TTL=6 (fisso) dimensioni mappa fisse (quelle che ci sono già)
+
+- somma Byte inviati da ciascun nodo in base al numero di nodi [Y:total Byte sent][X: numero nodi 15-20-30-40-50-70-90] TTL=6 (fisso) dimensioni mappa fisse (quelle che ci sono già)
+
+- percentuale di consegna con TTL variabile [Y: 0%-100% delivery][X: TTL = 4,5,6,7,8,9] numeroNodi=50 (fisso) dimensioni mappa fisse (quelle che ci sono già)
+
+- tempi di consegna con TTL variabile [Y: tempo start - parziale pkt1 - ... - parziale pkt n tempo delivery][X: TTL = 4,5,6,7,8,9] numeroNodi=50 (fisso) dimensioni mappa fisse (quelle che ci sono già)
+
+- somma Byte inviati da ciascun nodo in base al TTL variabile [Y:total Byte sent][X: TTL = 4,5,6,7,8,9] numeroNodi=50 (fisso) dimensioni mappa fisse (quelle che ci sono già)
+
+- correlazione tra percentuale di consegna e somma Byte inviati dipendentemente dalla pausa prima dell'inoltro [Y:][X: pause_time= 0.1, 0.3, 0.5, 0.9, 1.5,3.0 secondi] numeroNodi=50 (fisso) dimensioni mappa fisse (quelle che ci sono già) TTL=6 (fisso) 
+
+- numero invii (usando il campo attempt) con numero nodi variabili (si potrebbe fare anche la sottrazione con numero di pacchetti inviati per vedere quanti invii sono falliti) [Y:attempt, media(attempt),attempt-pkt_sent][X:numero nodi 15-20-30-40-50-70-90] TTL=6 (fisso) dimensioni mappa fisse (quelle che ci sono già)
+
+- si può fare qualcosa facendo variare il tempo di cambio direzione (ora settato a 15s)
+
+- si può fare qualcosa facendo variare il seed (ora settato a 167)
+
+- si può fare qualcosa facendo variare RXGain/TXGain
