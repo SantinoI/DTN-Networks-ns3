@@ -33,6 +33,18 @@ enum {
 	PROPHET
 };
 
+std::vector<std::string> splitString(str::sting value, std::string delimited){
+  std::vector<std::string> values;
+  int pos = 0;
+  while ((pos = value.find(delimiter)) != std::string::npos) {
+      token = value.substr(0, pos);
+      values.push_back(token);
+      value.erase(0, pos + delimiter.length());
+  }
+  values.push_back(value);
+  return values;
+}
+
 class PayLoadConstructor{
   private:
   	int type;
@@ -61,18 +73,12 @@ class PayLoadConstructor{
     void decreaseTtl(){ ttl -= 1; };
 
     void fromString(std::string stringPayload){
-      size_t pos = 0;
-      int iterationCounter = 0;
-      std::string token;
       if(type == EPIDEMIC){
-            while ((pos = stringPayload.find(delimiter)) != std::string::npos) {
-                token = stringPayload.substr(0, pos);
-                if(iterationCounter == 0) destinationAddress = ns3::Ipv4Address(token.c_str());  // destinationAddress = token;
-                else ttl = std:: stoi(token);
-                stringPayload.erase(0, pos + delimiter.length());
-                iterationCounter++;
-            }
-            uid = std:: stoi(stringPayload);
+          // 10.0.2.3;5;3 => IP;TTL;UID
+          std::vector<std::string> values = splitString(stringPayload, delimiter);
+          destinationAddress = ns3::Ipv4Address(values[0].c_str());
+          ttl = std::stoi(values[1]);
+          uid = std::stoi(values[2]);
       }
     }
 
@@ -148,37 +154,21 @@ class NodeHandler{
         return false;
       }
     int countInReceived(std::string value){
-      size_t pos = 0;
-      int iterationCounter = 0;
-      std::string token;
-      ns3::Ipv4Address previousAddress;
-      int uid;
-      std::string delimiter = ";";
-      while ((pos = value.find(delimiter)) != std::string::npos) {
-          token = value.substr(0, pos);
-          if(iterationCounter == 0) previousAddress = ns3::Ipv4Address(token.c_str());  // destinationAddress = token;
-          value.erase(0, pos + delimiter.length());
-          iterationCounter++;
-      }
-      uid = std:: stoi(value);
-
+      // 10.0.1.2;5 => IP;UID
+      std::vector<std::string> values = splitString(value, ";");
+      ns3::Ipv4Address previousAddress = ns3::Ipv4Address(values[0].c_str());
+      int uid = std::stoi(values[1]);
 
       std::stack<std::string> s = uidsPacketReceived;
 
       int counter = 0;
       while (!s.empty()) {
         std::string top = s.top();
-        pos = 0;
-        iterationCounter = 0;
-        ns3::Ipv4Address tempPreviousAddress;
-        int tempUid;
-        while ((pos = value.find(delimiter)) != std::string::npos) {
-            token = value.substr(0, pos);
-            if(iterationCounter == 0) tempPreviousAddress = ns3::Ipv4Address(token.c_str());  // destinationAddress = token;
-            value.erase(0, pos + delimiter.length());
-            iterationCounter++;
-        }
-        tempUid = std:: stoi(value);
+        // 10.0.1.2;5 => IP;UID
+        values = splitString(top, ";");
+        ns3::Ipv4Address tempPreviousAddress = ns3::Ipv4Address(values[0].c_str());
+        int tempUid = std::stoi(values[1]);
+
         if( uid == tempUid ) counter++;
         s.pop();
       }
@@ -240,7 +230,6 @@ void ReceivePacket (Ptr<Socket> socket){
 
     nodeHandlerArray[socket->GetNode()->GetId()].increaseBytesReceived((double)pkt->GetSize());
   	nodeHandlerArray[socket->GetNode()->GetId()].increasePacketsReceived(1);
-
 
     ip_sender = InetSocketAddress::ConvertFrom (from).GetIpv4 ();
 
