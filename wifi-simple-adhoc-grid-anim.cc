@@ -45,6 +45,12 @@ std::vector<std::string> splitString(str::sting value, std::string delimiter){
   return values;
 }
 
+std::string stringAddressUid(Ipv4Address address, int uid, std::string delimiter){
+  std::ostringstream value;
+  value << address << delimiter << uid;
+  return value.str();
+}
+
 class PayLoadConstructor{
   private:
   	int type;
@@ -186,11 +192,10 @@ class NodeHandler{
     }
 
     void pushInStack(uint64_t value){ packetsScheduled.push(value); }
-    std::string pushInReceived(ns3::Ipv4Address previousAddress,int uid){
-      std::ostringstream value;
-      value << previousAddress << ";" << uid;
-      uidsPacketReceived.push(value.str());
-      return value.str();
+    std::string pushInReceived(ns3::Ipv4Address previousAddress, int uid){
+      std::string value = stringAddressUid(previousAddress, uid, ";");
+      uidsPacketReceived.push(value);
+      return value;
     }
     void popFromStack(){ packetsScheduled.pop(); }
     void popFromReceived(){ uidsPacketReceived.pop(); }
@@ -198,7 +203,7 @@ class NodeHandler{
 
 std::vector<NodeHandler> nodeHandlerArray;
 
-static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UID, std::string previousAddress_uid){
+static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UID, std::string previousAddressUid){
   // Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
   // Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
   // Ipv4Address ip_sender = iaddr.GetLocal ();
@@ -206,7 +211,7 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UI
 
   if(currentNode.searchInStack(UID) == false || //stack of sent pkt
     (currentNode.searchInStack(UID) == true && //stack of sent pkt
-      (currentNode.countInReceived(previousAddress_uid) < 2))   //stack of received pkt
+      (currentNode.countInReceived(previousAddressUid) < 2))   //stack of received pkt
     ){
     NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << "\tGoing to send packet");
     socket->Send (packet);
@@ -214,7 +219,7 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UI
     currentNode.increaseBytesSent((double)packet->GetSize());
     currentNode.increasePacketsSent(1);
 
-    Simulator::Schedule (Seconds(60), &GenerateTraffic, socket, packet, UID, previousAddress_uid);
+    Simulator::Schedule (Seconds(60), &GenerateTraffic, socket, packet, UID, previousAddressUid);
   }
 
   // socket->Close ();
@@ -245,12 +250,10 @@ void ReceivePacket (Ptr<Socket> socket){
     // Only for clear code, nothing else for the moment
     uint32_t UID = payload.getUid();
     uint32_t TTL = payload.getTtl();
-    Ipv4Address destinationAddress = payload.getDestinationAddress();
-    std::ostringstream value;
-    value << ip_sender << ";" << UID;
-    std::string previousAddress_uid = value.str();
 
-    if (currentNode.searchInReceived(previousAddress_uid) == false) currentNode.pushInReceived(ip_sender, UID);
+    std::string previousAddressUid = stringAddressUid(destinationAddress, UID, ";");
+
+    if (currentNode.searchInReceived(previousAddressUid) == false) currentNode.pushInReceived(ip_sender, UID);
 
     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "  " << socket->GetNode()->GetId() << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID << " and TTL " << TTL << " from: " << ip_sender << " to: " << destinationAddress);
 
@@ -271,7 +274,7 @@ void ReceivePacket (Ptr<Socket> socket){
               double randomPause = x->GetValue(0.1, 1.0);
               // NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\tNodo numero: " << socket->GetNode()->GetId() << " attesa di " << randomPause );
               Simulator::Schedule (Seconds(randomPause), &GenerateTraffic,
-                                  socket, packet, UID, previousAddress_uid);
+                                  socket, packet, UID, previousAddressUid);
 
         } else {
           NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "\tI've already scheduled the message with uid: " << UID);
@@ -448,11 +451,8 @@ int main (int argc, char *argv[]){
     payload.setDestinationAddress(ip_receiver);
     Ptr<Packet> packet = payload.toPacket();
 
-    std::ostringstream value;
-    value << ip_sender << ";" << UID;
-
     Simulator::Schedule(Seconds(300 * i), &GenerateTraffic,
-                        source, packet, UID, value.str());
+                        source, packet, UID, stringAddressUid(ip_sender, UID, ";"));
 
     UID += 1;
   }
