@@ -33,7 +33,7 @@ enum {
 	PROPHET
 };
 
-std::vector<std::string> splitString(str::sting value, std::string delimited){
+std::vector<std::string> splitString(str::sting value, std::string delimiter){
   std::vector<std::string> values;
   int pos = 0;
   while ((pos = value.find(delimiter)) != std::string::npos) {
@@ -202,17 +202,17 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UI
   // Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
   // Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
   // Ipv4Address ip_sender = iaddr.GetLocal ();
+  NodeHandler currentNode = nodeHandlerArray[socket->GetNode()->GetId()];
 
-
-  if(nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID) == false or //stack of sent pkt
-    (nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID) == true and //stack of sent pkt
-      (nodeHandlerArray[socket->GetNode()->GetId()].countInReceived(previousAddress_uid) < 2))   //stack of received pkt
+  if(currentNode.searchInStack(UID) == false || //stack of sent pkt
+    (currentNode.searchInStack(UID) == true && //stack of sent pkt
+      (currentNode.countInReceived(previousAddress_uid) < 2))   //stack of received pkt
     ){
     NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << "\tGoing to send packet");
     socket->Send (packet);
-    nodeHandlerArray[socket->GetNode()->GetId()].pushInStack(UID);
-    nodeHandlerArray[socket->GetNode()->GetId()].increaseBytesSent((double)packet->GetSize());
-    nodeHandlerArray[socket->GetNode()->GetId()].increasePacketsSent(1);
+    currentNode.pushInStack(UID);
+    currentNode.increaseBytesSent((double)packet->GetSize());
+    currentNode.increasePacketsSent(1);
 
     Simulator::Schedule (Seconds(60), &GenerateTraffic, socket, packet, UID, previousAddress_uid);
   }
@@ -228,8 +228,10 @@ void ReceivePacket (Ptr<Socket> socket){
 
   while (pkt = socket->RecvFrom(from)){
 
-    nodeHandlerArray[socket->GetNode()->GetId()].increaseBytesReceived((double)pkt->GetSize());
-  	nodeHandlerArray[socket->GetNode()->GetId()].increasePacketsReceived(1);
+    NodeHandler currentNode = nodeHandlerArray[socket->GetNode()->GetId()];
+
+    currentNode.increaseBytesReceived((double)pkt->GetSize());
+  	currentNode.increasePacketsReceived(1);
 
     ip_sender = InetSocketAddress::ConvertFrom (from).GetIpv4 ();
 
@@ -248,13 +250,13 @@ void ReceivePacket (Ptr<Socket> socket){
     value << ip_sender << ";" << UID;
     std::string previousAddress_uid = value.str();
 
-    if (nodeHandlerArray[socket->GetNode()->GetId()].searchInReceived(previousAddress_uid) == false){nodeHandlerArray[socket->GetNode()->GetId()].pushInReceived(ip_sender,UID);}
+    if (currentNode.searchInReceived(previousAddress_uid) == false) currentNode.pushInReceived(ip_sender, UID);
 
     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ip_receiver << "  " << socket->GetNode()->GetId() << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID << " and TTL " << TTL << " from: " << ip_sender << " to: " << destinationAddress);
 
     if(ip_receiver != destinationAddress) {
       if(TTL != 0){
-        if (nodeHandlerArray[socket->GetNode()->GetId()].searchInStack(UID) == false){
+        if (currentNode.searchInStack(UID) == false){
               InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80);
               socket->SetAllowBroadcast (true);
               socket->Connect (remote);
