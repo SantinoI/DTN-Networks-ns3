@@ -28,11 +28,11 @@ NS_LOG_COMPONENT_DEFINE ("WifiSimpleAdhocGrid");
 
 // Define enumeration for PayLoad type
 enum {
-	EPIDEMIC,
-	HELLO,
+  EPIDEMIC,
+  HELLO,
   HELLO_ACK,
   HELLO_ACK2,
-	PROPHET
+  PROPHET
 };
 
 typedef struct{
@@ -70,7 +70,7 @@ std::string createStringAddressUid(Ipv4Address address, int uid, std::string del
 
 class PayLoadConstructor{
   private:
-  	int type;
+    int type;
     uint32_t ttl;
     uint32_t uid;
     Ipv4Address destinationAddress;
@@ -84,11 +84,12 @@ class PayLoadConstructor{
 
     uint32_t getTtl(){ return ttl; };
     uint32_t getUid(){ return uid; };
-    int getType(){return type;};
+    int getType(){ return type; };
     Ipv4Address getDestinationAddress(){ return destinationAddress; };
 
     void setTtl(uint32_t value){ ttl = value; };
     void setUid(uint32_t value){ uid = value; };
+    void setType(int value){ type = value; };
     void setDestinationAddress(Ipv4Address value){ destinationAddress = value; };
 
     // Ipv4Address getDestinationAddressAsString(){ return destinationAddress; };
@@ -140,7 +141,8 @@ class PayLoadConstructor{
       Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
       return packet;
     }
-    Ptr<Packet> toPacketFromString(std::ostringstream msg){
+    Ptr<Packet> toPacketFromString(std::ostringstream &msg){
+      // NS_LOG_UNCOND("RICEVUTO AS ARGUMENT " << msg.str());
       uint32_t packetSize = msg.str().length()+1;
       Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
       return packet;
@@ -322,7 +324,7 @@ void ReceivePacket (Ptr<Socket> socket){
     NodeHandler* currentNode = &nodeHandlerArray[socket->GetNode()->GetId()];
 
     currentNode->increaseBytesReceived((double)pkt->GetSize());
-  	currentNode->increasePacketsReceived(1);
+    currentNode->increasePacketsReceived(1);
 
     ipSender = InetSocketAddress::ConvertFrom (from).GetIpv4 ();
 
@@ -338,12 +340,12 @@ void ReceivePacket (Ptr<Socket> socket){
       
       currentNode->updatePredictability(payload.getType(),ipSender);
       std::ostringstream predicability = currentNode->getPredictability();
-      PayLoadConstructor payload = PayLoadConstructor(HELLO_ACK);
+      payload.setType(HELLO_ACK);
       Ptr<Packet> packet = payload.toPacketFromString(predicability);
       // Invio ACK con la tabella del nodo attuale
-      std::ostringstream msg = currentNode->getPredictability();
-      uint32_t packetSize = msg.str().length()+1;
-      Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
+      // std::ostringstream msg = currentNode->getPredictability();
+      // uint32_t packetSize = msg.str().length()+1;
+      // Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
       InetSocketAddress remote = InetSocketAddress (ipSender, 80);
       socket->Connect (remote);
       socket->Send(packet);
@@ -433,7 +435,7 @@ int main (int argc, char *argv[]){
                                 "Theta", StringValue ("ns3::UniformRandomVariable[Min=-10.0|Max=10.0]"),
                                 "Rho", StringValue ("ns3::UniformRandomVariable[Min=10.0|Max=10.0]"));
   mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                           	"Mode", StringValue ("Time"),
+                            "Mode", StringValue ("Time"),
                             "Time", StringValue ("15s"),
                             "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=10.0]"),// 36 km/h
                             "Bounds", StringValue ("0|50|0|50"));
