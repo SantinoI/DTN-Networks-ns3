@@ -54,7 +54,7 @@ std::vector<std::string> splitString(std::string value, std::string delimiter){
   return values;
 }
 
-std::string stringAddressUid(Ipv4Address address, int uid, std::string delimiter){
+std::string createStringAddressUid(Ipv4Address address, int uid, std::string delimiter){
   std::ostringstream value;
   value << address << delimiter << uid;
   return value.str();
@@ -69,8 +69,6 @@ class PayLoadConstructor{
     std::string delimiter;
 
   public:
-    PayLoadConstructor(){}
-    
     PayLoadConstructor(int _type){
       delimiter =  ";";
       type = _type;
@@ -173,7 +171,6 @@ class NodeHandler{
     int countInReceived(std::string value){
       // 10.0.1.2;5 => IP;UID
       std::vector<std::string> values = splitString(value, ";");
-      // ns3::Ipv4Address previousAddress = ns3::Ipv4Address(values[0].c_str());
       int uid = std::stoi(values[1]);
 
       std::stack<std::string> s = uidsPacketReceived;
@@ -183,7 +180,6 @@ class NodeHandler{
         std::string top = s.top();
         // 10.0.1.2;5 => IP;UID
         values = splitString(top, ";");
-        // ns3::Ipv4Address tempPreviousAddress = ns3::Ipv4Address(values[0].c_str());
         int tempUid = std::stoi(values[1]);
 
         if( uid == tempUid ) counter++;
@@ -204,7 +200,7 @@ class NodeHandler{
 
     void pushInStack(uint64_t value){ packetsScheduled.push(value); }
     std::string pushInReceived(ns3::Ipv4Address previousAddress, int uid){
-      std::string value = stringAddressUid(previousAddress, uid, ";");
+      std::string value = createStringAddressUid(previousAddress, uid, ";");
       uidsPacketReceived.push(value);
       return value;
     }
@@ -219,21 +215,22 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UI
   Ipv4InterfaceAddress iaddr = ipv4->GetAddress (1,0);
   Ipv4Address ipSender = iaddr.GetLocal ();
 
-  NodeHandler currentNode = nodeHandlerArray[socket->GetNode()->GetId()];
+  NodeHandler* currentNode = &nodeHandlerArray[socket->GetNode()->GetId()];
 
-  if(currentNode.searchInStack(UID) == false || //stack of sent pkt
-    (currentNode.searchInStack(UID) == true && //stack of sent pkt
-      (currentNode.countInReceived(previousAddressUid) < 2))   //stack of received pkt
+  if(currentNode->searchInStack(UID) == false ||                 //stack of sent pkt
+    (currentNode->searchInStack(UID) == true &&                  //stack of sent pkt
+      (currentNode->countInReceived(previousAddressUid) < 2))    //stack of received pkt
     ){
-    NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << "\tGoing to send packet");
+    
+    NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ipSender << "\tGoing to send packet with uid: " << UID);
 
     socket->Send (packet);
-    if(previousAddressUid.compare(stringAddressUid(ipSender, (int)UID, ";")) == 0)
+    if(previousAddressUid.compare(createStringAddressUid(ipSender, (int)UID, ";")) == 0)
       dataForPackets[UID].start = Simulator::Now().GetSeconds();
 
-    currentNode.pushInStack(UID);
-    currentNode.increaseBytesSent((double)packet->GetSize());
-    currentNode.increasePacketsSent(1);
+    currentNode->pushInStack(UID);
+    currentNode->increaseBytesSent((double)packet->GetSize());
+    currentNode->increasePacketsSent(1);
 
     Simulator::Schedule (Seconds(60), &GenerateTraffic, socket, packet, UID, previousAddressUid);
   }
@@ -249,10 +246,10 @@ void ReceivePacket (Ptr<Socket> socket){
 
   while (pkt = socket->RecvFrom(from)){
 
-    NodeHandler currentNode = nodeHandlerArray[socket->GetNode()->GetId()];
+    NodeHandler* currentNode = &nodeHandlerArray[socket->GetNode()->GetId()];
 
-    currentNode.increaseBytesReceived((double)pkt->GetSize());
-  	currentNode.increasePacketsReceived(1);
+    currentNode->increaseBytesReceived((double)pkt->GetSize());
+  	currentNode->increasePacketsReceived(1);
 
     ipSender = InetSocketAddress::ConvertFrom (from).GetIpv4 ();
 
@@ -268,15 +265,15 @@ void ReceivePacket (Ptr<Socket> socket){
     uint32_t TTL = payload.getTtl();
     Ipv4Address destinationAddress = payload.getDestinationAddress();
 
-    std::string previousAddressUid = stringAddressUid(destinationAddress, (int)UID, ";");
+    std::string previousAddressUid = createStringAddressUid(destinationAddress, (int)UID, ";");
 
-    if (currentNode.searchInReceived(previousAddressUid) == false) currentNode.pushInReceived(ipSender, UID);
+    if (currentNode->searchInReceived(previousAddressUid) == false) currentNode->pushInReceived(ipSender, UID);
 
     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ipReceiver << "  " << socket->GetNode()->GetId() << "\tReceived pkt size: " <<  pkt->GetSize () << " bytes with uid " << UID << " and TTL " << TTL << " from: " << ipSender << " to: " << destinationAddress);
 
     if(ipReceiver != destinationAddress) {
       if(TTL != 0){
-        if (currentNode.searchInStack(UID) == false){
+        if (currentNode->searchInStack(UID) == false){
               InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80);
               socket->SetAllowBroadcast (true);
               socket->Connect (remote);
@@ -310,15 +307,12 @@ void ReceivePacket (Ptr<Socket> socket){
 int main (int argc, char *argv[]){
   std::string phyMode ("DsssRate1Mbps");
   //uint32_t gridWidth = 10;
-
-  double distance = 150;  // m
+  // double distance = 150;  // m
+  
   uint32_t numPackets = 2;
   uint32_t numNodes = 80;  // by default, 50
   uint32_t sinkNode = 45;
   uint32_t sourceNode = 44;
-  double interval = 25.0; // seconds
-  bool verbose = false;
-  bool tracing = false;
 
   uint32_t TTL = 6;
   uint32_t UID = 0;
@@ -327,20 +321,15 @@ int main (int argc, char *argv[]){
 
   CommandLine cmd;
   cmd.AddValue ("phyMode", "Wifi Phy mode", phyMode);
-  cmd.AddValue ("distance", "distance (m)", distance);
+  // cmd.AddValue ("distance", "distance (m)", distance);
   cmd.AddValue ("numPackets", "number of packets generated", numPackets);
-  cmd.AddValue ("interval", "interval (seconds) between packets", interval);
-  cmd.AddValue ("verbose", "turn on all WifiNetDevice log components", verbose);
-  cmd.AddValue ("tracing", "turn on ascii and pcap tracing", tracing);
   cmd.AddValue ("numNodes", "number of nodes", numNodes);
   cmd.AddValue ("sinkNode", "Receiver node number", sinkNode);
   cmd.AddValue ("sourceNode", "Sender node number", sourceNode);
-  cmd.AddValue ("TTL", "TTL For each packet", TTL);
+  cmd.AddValue ("ttl", "TTL For each packet", TTL);
 
   cmd.AddValue ("rss", "received signal strength", rss);
   cmd.Parse (argc, argv);
-  // Convert to time object
-  Time interPacketInterval = Seconds (interval);
 
   // Fix non-unicast data rate to be the same as that of unicast
   Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",
@@ -349,7 +338,7 @@ int main (int argc, char *argv[]){
   NodeContainer c;
   c.Create (numNodes);
 
-  SeedManager::SetSeed (167);
+  SeedManager::SetSeed (91);
 
   // The below set of helpers will help us to put together the wifi NICs we want
   WifiHelper wifi;
@@ -358,8 +347,8 @@ int main (int argc, char *argv[]){
   // FROM WIFI SIMPLE ADHOC GRID
 
   // set it to zero; otherwise, gain will be added
-  wifiPhy.Set ("RxGain", DoubleValue (-1) );
-  wifiPhy.Set ("TxGain", DoubleValue (-1) );
+  wifiPhy.Set ("RxGain", DoubleValue (4) );
+  wifiPhy.Set ("TxGain", DoubleValue (4) );
   // ns-3 supports RadioTap and Prism tracing extensions for 802.11b
   wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
 
@@ -461,10 +450,9 @@ int main (int argc, char *argv[]){
   Ipv4InterfaceAddress iaddrSender = c.Get(sourceNode)->GetObject<Ipv4>()->GetAddress (1,0);
   Ipv4Address ipSender = iaddrSender.GetLocal ();
 
-  PayLoadConstructor payload;
   for (uint32_t i=0; i<numPackets; i++){
-    payload = PayLoadConstructor(EPIDEMIC);
-    payload.setTtl(TTL);
+    PayLoadConstructor payload = PayLoadConstructor(EPIDEMIC);
+    payload.setTtl(TTL + (i*2));
     payload.setUid(UID);
     payload.setDestinationAddress(ipReceiver);
     Ptr<Packet> packet = payload.toPacket();
@@ -472,7 +460,7 @@ int main (int argc, char *argv[]){
     PacketLogData dataPacket = {false, 0.00, 0.00};
     dataForPackets.push_back(dataPacket);
     Simulator::Schedule(Seconds(300 * i), &GenerateTraffic,
-                        source, packet, UID, stringAddressUid(ipSender, (int)UID, ";"));
+                        source, packet, UID, createStringAddressUid(ipSender, (int)UID, ";"));
 
     UID += 1;
   }
@@ -494,7 +482,7 @@ int main (int argc, char *argv[]){
   anim.UpdateNodeDescription(c.Get(sourceNode),"Sender");
   anim.UpdateNodeDescription(c.Get(sinkNode),"Receiver");
 
-  Simulator::Stop (Seconds (7230.0));
+  Simulator::Stop (Seconds (7000.0));
 
   Simulator::Run ();
   Simulator::Destroy ();
@@ -505,7 +493,7 @@ int main (int argc, char *argv[]){
   }
   NS_LOG_UNCOND("- Packets sent: \t" << (int)dataForPackets.size());
   NS_LOG_UNCOND("- Packets delivered: \t" << deliveredCounter);
-  NS_LOG_UNCOND("- Delivery percentage: \t" << (deliveredCounter / (int)dataForPackets.size()) * 100 << "%");
+  NS_LOG_UNCOND("- Delivery percentage: \t" << ((double)deliveredCounter / (double)dataForPackets.size()) * 100.00 << "%");
   // Delivery time (?) (?) (?)
 
   double totalBytesSent = 0.00;
