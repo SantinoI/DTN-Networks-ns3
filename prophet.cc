@@ -31,6 +31,7 @@ enum {
 	EPIDEMIC,
 	HELLO,
   HELLO_ACK,
+  HELLO_ACK2,
 	PROPHET
 };
 
@@ -139,6 +140,11 @@ class PayLoadConstructor{
       Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
       return packet;
     }
+    Ptr<Packet> toPacketFromString(std::ostringstream msg){
+      uint32_t packetSize = msg.str().length()+1;
+      Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
+      return packet;
+    }
 };
 
 class NodeHandler{
@@ -151,8 +157,8 @@ class NodeHandler{
     std::stack<uint64_t> packetsScheduled;
     std::stack<std::string> uidsPacketReceived;
     std::stack<Meet> meeting;
-
-    // Next routing table values
+    // Vettore delle predizioni. es A:23.8;B:96
+    std::vector<std::string> predictability;
 
   public:
     NodeHandler(){
@@ -177,6 +183,42 @@ class NodeHandler{
     void setBytesReceived(double value){ bytesReceived = value; }
     void setPacketsReceived(double value){ packetsReceived = value; }
 
+    std::ostringstream getPredictability(){
+      std::ostringstream msg;
+      for(int i = 0; i < (int)predictability.size(); i++){
+        msg << predictability[i] << ";";
+      }
+      NS_LOG_UNCOND("predictability del nodo è " << msg.str());
+      return msg;
+    }
+
+    void updatePredictability(int type,Ipv4Address ip){
+      //std::vector<std::string> value = 
+
+      if(type == HELLO){
+        bool exist = false;
+        for(int i = 0; i < (int)predictability.size(); i++){
+          std::vector<std::string> oldValue = splitString(predictability[i], ":");
+          if(ns3::Ipv4Address(oldValue[0].c_str()) == ip){
+            exist = true;
+            NS_LOG_UNCOND("Ho trovato un riscontro, sto aggiornando " << oldValue[0]);
+            float newValue =  atof(oldValue[0].c_str()) + (1- atof(oldValue[0].c_str()))* 0.75;
+            NS_LOG_UNCOND("Il nuovo valore è " << newValue);
+            predictability.erase(predictability.begin()+i);
+            std::ostringstream newEntry;
+            newEntry << ip << ":" << newValue;
+            predictability.push_back(newEntry.str());
+
+          }
+        }
+        if(exist == false ){
+          std::ostringstream newEntry;
+          newEntry << ip << ":" << "0";
+          predictability.push_back(newEntry.str());
+        }
+      }
+
+    }
     void increaseBytesSent(double value){ bytesSent += value; }
     void increasePacketsSent(double value){ packetsSent += value; }
     void increaseBytesReceived(double value){ bytesReceived += value; }
@@ -293,13 +335,26 @@ void ReceivePacket (Ptr<Socket> socket){
     NS_LOG_UNCOND(socket->GetNode()->GetId()<<" Ho ricevuto un pacchetto al tempo " << Simulator::Now().GetSeconds()  << " DA " << ipSender << " " << payload.getType());
 
     if(payload.getType() == HELLO){
+      
+      currentNode->updatePredictability(payload.getType(),ipSender);
+      std::ostringstream predicability = currentNode->getPredictability();
       PayLoadConstructor payload = PayLoadConstructor(HELLO_ACK);
-      Ptr<Packet> packet = payload.toPacket();
+      Ptr<Packet> packet = payload.toPacketFromString(predicability);
+      // Invio ACK con la tabella del nodo attuale
+      std::ostringstream msg = currentNode->getPredictability();
+      uint32_t packetSize = msg.str().length()+1;
+      Ptr<Packet> packet = Create<Packet> ((uint8_t*) msg.str().c_str(), packetSize);
       InetSocketAddress remote = InetSocketAddress (ipSender, 80);
       socket->Connect (remote);
       socket->Send(packet);
     }
     else if(payload.getType() == HELLO_ACK){
+      currentNode->pushInMeeting(ipSender, Simulator::Now().GetSeconds());
+      currentNode->printMeeting(socket->GetNode()->GetId());
+
+
+    }
+    else if(payload.getType() == HELLO_ACK2){
       currentNode->pushInMeeting(ipSender, Simulator::Now().GetSeconds());
       currentNode->printMeeting(socket->GetNode()->GetId());
     }
