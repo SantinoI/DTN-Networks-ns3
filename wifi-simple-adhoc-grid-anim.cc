@@ -34,16 +34,17 @@ enum {
 };
 
 typedef struct{
-  boolean delivered;
+  bool delivered;
   double start;
   double delivered_at;
-} PacketLogData
+} PacketLogData;
 
 std::vector<PacketLogData> dataForPackets;
 
-std::vector<std::string> splitString(str::sting value, std::string delimiter){
+std::vector<std::string> splitString(std::string value, std::string delimiter){
   std::vector<std::string> values;
-  int pos = 0;
+  size_t pos = 0;
+  std::string token;
   while ((pos = value.find(delimiter)) != std::string::npos) {
       token = value.substr(0, pos);
       values.push_back(token);
@@ -68,6 +69,8 @@ class PayLoadConstructor{
     std::string delimiter;
 
   public:
+    PayLoadConstructor(){}
+    
     PayLoadConstructor(int _type){
       delimiter =  ";";
       type = _type;
@@ -170,7 +173,7 @@ class NodeHandler{
     int countInReceived(std::string value){
       // 10.0.1.2;5 => IP;UID
       std::vector<std::string> values = splitString(value, ";");
-      ns3::Ipv4Address previousAddress = ns3::Ipv4Address(values[0].c_str());
+      // ns3::Ipv4Address previousAddress = ns3::Ipv4Address(values[0].c_str());
       int uid = std::stoi(values[1]);
 
       std::stack<std::string> s = uidsPacketReceived;
@@ -180,7 +183,7 @@ class NodeHandler{
         std::string top = s.top();
         // 10.0.1.2;5 => IP;UID
         values = splitString(top, ";");
-        ns3::Ipv4Address tempPreviousAddress = ns3::Ipv4Address(values[0].c_str());
+        // ns3::Ipv4Address tempPreviousAddress = ns3::Ipv4Address(values[0].c_str());
         int tempUid = std::stoi(values[1]);
 
         if( uid == tempUid ) counter++;
@@ -263,6 +266,7 @@ void ReceivePacket (Ptr<Socket> socket){
     // Only for clear code, nothing else for the moment
     uint32_t UID = payload.getUid();
     uint32_t TTL = payload.getTtl();
+    Ipv4Address destinationAddress = payload.getDestinationAddress();
 
     std::string previousAddressUid = stringAddressUid(destinationAddress, (int)UID, ";");
 
@@ -458,14 +462,15 @@ int main (int argc, char *argv[]){
   Ipv4Address ipSender = iaddrSender.GetLocal ();
 
   PayLoadConstructor payload;
-  for (uint32_t = 0; i < numPackets; i++){
+  for (uint32_t i=0; i<numPackets; i++){
     payload = PayLoadConstructor(EPIDEMIC);
     payload.setTtl(TTL);
     payload.setUid(UID);
     payload.setDestinationAddress(ipReceiver);
     Ptr<Packet> packet = payload.toPacket();
 
-    dataForPackets.push_back(PacketLogData = {false, 0.00, 0.00});
+    PacketLogData dataPacket = {false, 0.00, 0.00};
+    dataForPackets.push_back(dataPacket);
     Simulator::Schedule(Seconds(300 * i), &GenerateTraffic,
                         source, packet, UID, stringAddressUid(ipSender, (int)UID, ";"));
 
@@ -495,12 +500,12 @@ int main (int argc, char *argv[]){
   Simulator::Destroy ();
 
   int deliveredCounter = 0;
-  for (int i = 0; i < dataForPackets.size(); i++){
+  for (int i = 0; i < (int)dataForPackets.size(); i++){
     if(dataForPackets[i].delivered == true) deliveredCounter++;
   }
-  NS_LOG_UNCOND("- Packets sent: \t" << dataForPackets.size());
+  NS_LOG_UNCOND("- Packets sent: \t" << (int)dataForPackets.size());
   NS_LOG_UNCOND("- Packets delivered: \t" << deliveredCounter);
-  NS_LOG_UNCOND("- Delivery percentage: \t" << (deliveredCounter / dataForPackets.size()) * 100 << "%");
+  NS_LOG_UNCOND("- Delivery percentage: \t" << (deliveredCounter / (int)dataForPackets.size()) * 100 << "%");
   // Delivery time (?) (?) (?)
 
   double totalBytesSent = 0.00;
