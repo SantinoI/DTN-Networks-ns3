@@ -44,7 +44,7 @@ typedef struct{
 // Struttura di incontri
 typedef struct{
   Ipv4Address ip;
-  double time_meet;
+  float time_meet;
 } Meet;
 
 std::vector<PacketLogData> dataForPackets;
@@ -121,18 +121,12 @@ class PayLoadConstructor{
     };
 
     std::ostringstream toString(){
-    std::ostringstream msg;
-    if(type == EPIDEMIC){
-        msg << destinationAddress << delimiter << ttl << delimiter << uid;
-    }
-    else if(type == HELLO){
-        msg << "HELLO"; 
-    }
-    else if(type == HELLO_ACK){
-        msg << "HELLO_ACK";
-    }
-    return msg; 
-};
+        std::ostringstream msg;
+        if(type == EPIDEMIC){
+            msg << destinationAddress << delimiter << ttl << delimiter << uid;
+        }
+        return msg; 
+    };
 
     Ptr<Packet> toPacket(){
         std::ostringstream msg = toString();
@@ -162,7 +156,7 @@ class NodeHandler{
     float lastAging;
     std::stack<uint64_t> packetsScheduled;
     std::stack<std::string> uidsPacketReceived;
-    std::stack<Meet> meeting;
+    std::vector<Meet> meeting;
     // Vettore delle predizioni. es A:23.8;B:96
     std::vector<std::string> predictability;
 
@@ -173,12 +167,7 @@ class NodeHandler{
         bytesReceived = 0.0;
         packetsReceived = 0;
         attempt = 0;
-        lastAging = 0;
     }
-
-    void setLastAging(double newTime){lastAging = newTime; }
-    float getLastAging(double newTime){return newTime - lastAging;}
-
     double getBytesSent(){ return bytesSent; }
     int getPacketsSent(){ return packetsSent; }
 
@@ -193,6 +182,19 @@ class NodeHandler{
 
     void setBytesReceived(double value){ bytesReceived = value; }
     void setPacketsReceived(double value){ packetsReceived = value; }
+
+    float getLasMeeting(float now, Ipv4Address ip){
+        for (int i = 0; i < (int)meeting.size(); i++){
+            if(meeting[i].ip == ip){
+                float diff = now - meeting[i].time_meet; 
+                meeting[i].time_meet = now;
+                return diff;
+            }
+        }
+        Meet meet = {ip,now};
+        meeting.push_back(meet);
+        return now;
+    }
 
     std::ostringstream getPredictability(){
         std::ostringstream msg;
@@ -210,8 +212,13 @@ class NodeHandler{
         NS_LOG_UNCOND("predictability del nodo è " << msg.str());
     }
 
-    void updatePredictability(int type,Ipv4Address ip){
-      //std::vector<std::string> value = 
+    void updatePredictability(Ptr<Packet> packet, Ipv4Address ip){
+        uint8_t *buffer = new uint8_t[packet->GetSize ()];
+        packet->CopyData(buffer, packet->GetSize ());
+        std::string stringPayload = std::string((char*)buffer);
+        std::vector<std::string> payloadData = splitString(stringPayload, ";");
+        int type = atoi(payloadData[0].c_str());
+
         if(type == HELLO){
             bool exist = false;
             for(int i = 0; i < (int)predictability.size(); i++){
@@ -219,7 +226,7 @@ class NodeHandler{
                 if(ns3::Ipv4Address(oldValue[0].c_str()) == ip){
                     exist = true;
                 //NS_LOG_UNCOND("Ho trovato un riscontro, sto aggiornando " << oldValue[0]);
-                float newValue =  atof(oldValue[0].c_str()) + (1- atof(oldValue[0].c_str()))* 0.75;
+                float newValue =  atof(oldValue[1].c_str()) + (1- atof(oldValue[1].c_str()))* 0.75;
                 //NS_LOG_UNCOND("Il nuovo valore è " << newValue);
                 //predictability.erase(predictability.begin()+i);
                 std::ostringstream newEntry;
@@ -237,8 +244,7 @@ class NodeHandler{
         }
         else if(type == HELLO_ACK){
         // Aggiorno il tempo trascorso dall'ultimo invecchiamento
-            float deltaAging =  getLastAging(Simulator::Now().GetSeconds());
-            //NS_LOG_UNCOND("sono trascorsi: " << deltaAging << " secondi");
+            float deltaAging =  getLasMeeting(Simulator::Now().GetSeconds(),ip);
 
             for(int i = 0; i < (int)predictability.size(); i++){
                 std::vector<std::string> oldValue = splitString(predictability[i], ":");
@@ -247,10 +253,9 @@ class NodeHandler{
                     NS_LOG_UNCOND("Ho trovato l'ip che devo saltare :" << oldValue[0].c_str() << " Faccio il break con i = " << i);
                     break;
                 }
-
                 if(ns3::Ipv4Address(oldValue[0].c_str()) != ip){
                     //if(ns3::Ipv4Address(oldValue[0].c_str()) == ip && i == (int)predicability.size()) break;
-                    float newValue =  atof(oldValue[0].c_str()) * (pow(0.98, deltaAging)); 
+                    float newValue =  atof(oldValue[1].c_str()) * (pow(0.98, deltaAging)); 
                     //NS_LOG_UNCOND("INVECCHIAMENTO: il vecchio valore è " << oldValue[1].c_str() << " Il nuovo è " << newValue);
                     //predictability.erase(predictability.begin()+i);
                     std::ostringstream newEntry;
@@ -262,6 +267,12 @@ class NodeHandler{
             }
             NS_LOG_UNCOND("FINE AGGIORNAMENTO DOPO HELLO_ACK");
             printPredictability();
+        }
+        // Itera l'array predictability del nodo corrente. Dentro si itera PayloadData,
+        // Predict[i] e payloadData[i] -- > split con : 
+        // M = Nodo corrente , E = ip (nodo incontrato), D = tutti gli altri
+        if(type == HELLO_ACK2 || type == HELLO_ACK){
+            
         }
     }
     void increaseBytesSent(double value){ bytesSent += value; }
@@ -316,22 +327,6 @@ class NodeHandler{
     }
     void popFromStack(){ packetsScheduled.pop(); }
     void popFromReceived(){ uidsPacketReceived.pop(); }
-    void pushInMeeting(Ipv4Address ip, double time_meet){
-      Meet meet = {ip,time_meet};
-      if(meeting.size() == 30){
-        meeting.pop();
-      }
-      meeting.push(meet);
-    }
-    void printMeeting(int io){
-      std::stack<Meet> s = meeting;
-
-      while (!s.empty()) {
-        Meet top = s.top();
-        NS_LOG_UNCOND("Io sono: " << io << " ho ricevuto l'ACK da  " << top.ip << " Al tempo " << top.time_meet); 
-        s.pop();
-      }
-    }
 };
 
 std::vector<NodeHandler> nodeHandlerArray;
@@ -392,7 +387,7 @@ void ReceivePacket (Ptr<Socket> socket){
 
     if(payload.getType() == HELLO){
       
-        currentNode->updatePredictability(payload.getType(),ipSender);
+        currentNode->updatePredictability(pkt, ipSender);
         std::ostringstream predicability = currentNode->getPredictability();
         payload.setType(HELLO_ACK);
         NS_LOG_UNCOND("Io sono -> " << ipReceiver <<" Ho ricevuto un HELLO da "<< ipSender <<" sto mandando alla funzione toPacketFromString: -> " << predicability.str());
@@ -404,22 +399,23 @@ void ReceivePacket (Ptr<Socket> socket){
     }
     else if(payload.getType() == HELLO_ACK){
         NS_LOG_UNCOND("Sono "<< ipReceiver << " HO RICEVUTO ACK");
-        currentNode->updatePredictability(payload.getType(),ipSender);
+        currentNode->updatePredictability(pkt, ipSender);
 
         std::ostringstream predicability = currentNode->getPredictability();
         
-        //NS_LOG_UNCOND("predictability è " << predicability.str());
-        //payload.setType(HELLO_ACK2);
-        //Ptr<Packet> packet = payload.toPacketFromString(predicability);
-        //InetSocketAddress remote = InetSocketAddress (ipSender, 80);
-        //socket->Connect (remote);
-        //socket->Send(packet);
+       
+        payload.setType(HELLO_ACK2);
+        Ptr<Packet> packet = payload.toPacketFromString(predicability);
+        InetSocketAddress remote = InetSocketAddress (ipSender, 80);
+        socket->Connect (remote);
+        socket->Send(packet);
         /*currentNode->pushInMeeting(ipSender, Simulator::Now().GetSeconds());
         currentNode->printMeeting(socket->GetNode()->GetId());*/
         
     }
     else if(payload.getType() == HELLO_ACK2){
         NS_LOG_UNCOND("HO RICEVUTO ACK_2");
+        //currentNode->updatePredictability(payload.getType(),ipSender);
     }
   }
 }
