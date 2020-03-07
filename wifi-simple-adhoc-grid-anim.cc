@@ -338,7 +338,7 @@ int main (int argc, char *argv[]){
   NodeContainer c;
   c.Create (numNodes);
 
-  SeedManager::SetSeed (91);
+  SeedManager::SetSeed (167);
 
   // The below set of helpers will help us to put together the wifi NICs we want
   WifiHelper wifi;
@@ -347,8 +347,8 @@ int main (int argc, char *argv[]){
   // FROM WIFI SIMPLE ADHOC GRID
 
   // set it to zero; otherwise, gain will be added
-  wifiPhy.Set ("RxGain", DoubleValue (4) );
-  wifiPhy.Set ("TxGain", DoubleValue (4) );
+  wifiPhy.Set ("RxGain", DoubleValue (-5) );
+  wifiPhy.Set ("TxGain", DoubleValue (-5) );
   // ns-3 supports RadioTap and Prism tracing extensions for 802.11b
   wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
 
