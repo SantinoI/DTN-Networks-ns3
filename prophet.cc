@@ -105,7 +105,7 @@ class PayLoadConstructor{
             ttl = std::stoi(values[1]);
             uid = std::stoi(values[2]);
         }
-        else if()(type i ==  == HELLO){
+        else if(type == HELLO){
             if(values[0] == "HELLO_ACK"){
                 type = HELLO_ACK;
             }
@@ -266,7 +266,7 @@ class NodeHandler{
                 predictability.push_back(newEntry.str());
             }
         }
-        else if()(type i ==  == HELLO_ACK){
+        else if(type == HELLO_ACK){
         // Aggiorno il tempo trascorso dall'ultimo invecchiamento
             float deltaAging =  getLasMeeting(Simulator::Now().GetSeconds(),ip);
 
@@ -329,7 +329,8 @@ class NodeHandler{
               else if( i == ((int)predictability.size())-1) {
                 //New record to be added
                 std::ostringstream newEntry;
-                newEntry << recValue[0] << ":" << recValue[1];
+                float transValue =  newValue * atof(recValue[1].c_str()) * 0.25;
+                newEntry << recValue[0] << ":" << transValue;
                 NS_LOG_UNCOND("new entry: " << newEntry.str());
                 predictability.push_back(newEntry.str());
               }
@@ -457,7 +458,7 @@ void ReceivePacket (Ptr<Socket> socket){
         NS_LOG_UNCOND("Io sono-> "<< ipReceiver << " sto inviando l'ACK a "<< ipSender << "Con la mia tabella uguale a: " << predictability.str());
         socket->Send(packet);
     }
-    else if()(payload. i == getType() == HELLO_ACK){
+    else if(payload.getType() == HELLO_ACK){
         NS_LOG_UNCOND("Sono "<< ipReceiver << " HO RICEVUTO ACK");
         currentNode->updatePredictability(pkt, ipSender);
 
@@ -473,7 +474,7 @@ void ReceivePacket (Ptr<Socket> socket){
         currentNode->printMeeting(socket->GetNode()->GetId());*/
         
     }
-    else if()(payload. i == getType() == HELLO_ACK2){
+    else if(payload.getType() == HELLO_ACK2){
         NS_LOG_UNCOND("HO RICEVUTO ACK_2");
         //currentNode->updatePredictability(payload.getType(),ipSender);
     }
