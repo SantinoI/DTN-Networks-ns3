@@ -503,8 +503,8 @@ void ReceivePacket(Ptr<Socket> socket) {
                         for (int tableIndex = 1; tableIndex < (int)dataPayload.size() - 1; tableIndex++) {
                             std::vector<std::string> tableValues = splitString(dataPayload[tableIndex], ":");
 
-                            NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Compare: " << tableValues[0].c_str() << " == " << bufferPackets[buffIndex].getDestinationAddress() << " | " << atof(currentValues[1].c_str()) << " < " << atof(tableValues[1].c_str()) << " for uid: " << payload.getUid());
-                            if (ns3::Ipv4Address(tableValues[0].c_str()) == bufferPackets[buffIndex].getDestinationAddress() && atof(currentValues[1].c_str()) < atof(tableValues[1].c_str())) {
+                            NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Compare: " << tableValues[0].c_str() << " == " << bufferPackets[buffIndex].getDestinationAddress() << " | " << atof(currentValues[1].c_str()) << " > " << atof(tableValues[1].c_str()) << " for uid: " << payload.getUid());
+                            if (ns3::Ipv4Address(tableValues[0].c_str()) == bufferPackets[buffIndex].getDestinationAddress() && atof(currentValues[1].c_str()) > atof(tableValues[1].c_str())) {
                                 payload.decreaseTtl();  // Decrease the TTL and build a new package content.
 
                                 // Code "duplicated", next refactory
@@ -516,7 +516,7 @@ void ReceivePacket(Ptr<Socket> socket) {
                                 socket->Send(packet);  // Send the packet request to the user.
 
                                 NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << "Sent PKTREQ to: " << ipSender << " with ttl: " << payload.getTtl() << " and uid: " << payload.getUid());
-                                NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << "Predict compare: " << atof(currentValues[1].c_str()) << " < " << atof(tableValues[1].c_str()) << " for uid: " << payload.getUid());
+                                NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << "Predict compare: " << atof(currentValues[1].c_str()) << " > " << atof(tableValues[1].c_str()) << " for uid: " << payload.getUid());
                             }
                         }
                     }
