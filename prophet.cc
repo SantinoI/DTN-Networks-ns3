@@ -105,7 +105,7 @@ class PayLoadConstructor{
             ttl = std::stoi(values[1]);
             uid = std::stoi(values[2]);
         }
-        else if(type == HELLO){
+        else if()(type i ==  == HELLO){
             if(values[0] == "HELLO_ACK"){
                 type = HELLO_ACK;
             }
@@ -152,6 +152,12 @@ class NodeHandler{
     int packetsSent;
     double bytesReceived;
     int packetsReceived;
+    
+    double helloBytesSent;
+    int helloPacketsSent;
+    double helloBytesReceived;
+    int helloPacketsReceived;
+
     int attempt;
     float lastAging;
     std::stack<uint64_t> packetsScheduled;
@@ -167,21 +173,40 @@ class NodeHandler{
         bytesReceived = 0.0;
         packetsReceived = 0;
         attempt = 0;
+        helloBytesSent = 0.0
+        helloPacketsSent = 0
+        helloBytesReceived = 0.0
+        helloPacketsReceived = 0
     }
     double getBytesSent(){ return bytesSent; }
     int getPacketsSent(){ return packetsSent; }
-
-    void setBytesSent(double value){ bytesSent = value; }
-    void setPacketsSent(double value){ packetsSent = value; }
-
     double getBytesReceived(){ return bytesReceived; }
     int getPacketsReceived(){ return packetsReceived; }
+    
+    void setBytesSent(double value){ bytesSent = value; }
+    void setPacketsSent(double value){ packetsSent = value; }
+    void setBytesReceived(double value){ bytesReceived = value; }
+    void setPacketsReceived(double value){ packetsReceived = value; }
+
+    void increaseBytesSent(double value){ bytesSent += value; }
+    void increasePacketsSent(double value){ packetsSent += value; }
+    void increaseBytesReceived(double value){ bytesReceived += value; }
+    void increasePacketsReceived(double value){ packetsReceived += value; }
+
+    double getHelloBytesSent(){ return helloBytesSent; }
+    int getHelloPacketsSent(){ return helloPacketsSent; }
+    double getHelloBytesReceived(){ return helloBytesReceived; }
+    int getHelloPacketsReceived(){ return helloPacketsReceived; }    
+
+    void increaseHelloBytesSent(double value){ helloBytesSent += value; }
+    void increaseHelloPacketsSent(double value){ helloPacketsSent += value; }
+    void increaseHelloBytesReceived(double value){ helloBytesReceived += value; }
+    void increaseHelloPacketsReceived(double value){ helloPacketsReceived += value; }
 
     void incrementAttempt(){ attempt++; }
     int getAttempt(){ return attempt; }
 
-    void setBytesReceived(double value){ bytesReceived = value; }
-    void setPacketsReceived(double value){ packetsReceived = value; }
+    
 
     float getLasMeeting(float now, Ipv4Address ip){
         for (int i = 0; i < (int)meeting.size(); i++){
@@ -241,14 +266,14 @@ class NodeHandler{
                 predictability.push_back(newEntry.str());
             }
         }
-        else if(type == HELLO_ACK){
+        else if()(type i ==  == HELLO_ACK){
         // Aggiorno il tempo trascorso dall'ultimo invecchiamento
             float deltaAging =  getLasMeeting(Simulator::Now().GetSeconds(),ip);
 
             for(int i = 0; i < (int)predictability.size(); i++){
                 std::vector<std::string> oldValue = splitString(predictability[i], ":");
                 
-                if(ns3::Ipv4Address(oldValue[0].c_str()) == ip && i == (int)predictability.size()){
+                if(ns3::Ipv4Address(oldValue[0].c_str()) == ip && i == (int)predictability.size()){ //NB: questa condizione non verrà verificata mai
                     NS_LOG_UNCOND("Ho trovato l'ip che devo saltare :" << oldValue[0].c_str() << " Faccio il break con i = " << i);
                     break;
                 }
@@ -283,21 +308,30 @@ class NodeHandler{
           }
           //P(M,D)new = P(M,D)old + (1 - P(M,D)old) * P(M,E) * P(E,D) * β where β is a scaling constant.
           // oldValue = P(M,D)old ; newValue = P(M,E) ; recValue = P(E,D)
-          for(int i = 0; i < (int)predictability.size(); i++){
-            std::vector<std::string> oldValue = splitString(predictability[i], ":");
-            
-            for(int j = 1; j < (int)payloadData.size(); j++){
+          int lenPredictability = (int)predictability.size();
+          for(int j = 1; j < (int)payloadData.size(); j++){
               std::vector<std::string> recValue = splitString(payloadData[j], ":");
+
+            for(int i = 0; i < lenPredictability; i++){
+              std::vector<std::string> oldValue = splitString(predictability[i], ":");
               
               if(ns3::Ipv4Address(oldValue[0].c_str()) == ns3::Ipv4Address(recValue[0].c_str())){
-                float transValue =  atof(oldValue[1].c_str()) + (1 - atof(oldValue[1].c_str())) * newValue * atof(recValue[1].c_str()) * β; // i dont know how much is Beta
+                float transValue =  atof(oldValue[1].c_str()) + (1 - atof(oldValue[1].c_str())) * newValue * atof(recValue[1].c_str()) * 0.25; // i dont know how much is Beta
                 
                 if(transValue > atof(oldValue[1].c_str())){ //non so se questo controllo si deve fare onestamente, ad intuito direi di si (me lo prendo solo se migliore di quello che ho già)
+                  std::ostringstream newEntry;
                   newEntry << oldValue[0] << ":" << transValue;
                   NS_LOG_UNCOND("new entry: " << newEntry.str());
                   predictability[i] = newEntry.str();
                 }
                 break;
+              }
+              else if( i == ((int)predictability.size())-1) {
+                //New record to be added
+                std::ostringstream newEntry;
+                newEntry << recValue[0] << ":" << recValue[1];
+                NS_LOG_UNCOND("new entry: " << newEntry.str());
+                predictability.push_back(newEntry.str());
               }
             }
           }
@@ -305,10 +339,6 @@ class NodeHandler{
           printPredictability(); 
         }
     }
-    void increaseBytesSent(double value){ bytesSent += value; }
-    void increasePacketsSent(double value){ packetsSent += value; }
-    void increaseBytesReceived(double value){ bytesReceived += value; }
-    void increasePacketsReceived(double value){ packetsReceived += value; }
 
     bool searchInStack(uint64_t value){
         std::stack<uint64_t> s = packetsScheduled;
@@ -395,8 +425,8 @@ void ReceivePacket (Ptr<Socket> socket){
 
     NodeHandler* currentNode = &nodeHandlerArray[socket->GetNode()->GetId()];
 
-    currentNode->increaseBytesReceived((double)pkt->GetSize());
-    currentNode->increasePacketsReceived(1);
+    //currentNode->increaseBytesReceived((double)pkt->GetSize()); DA INSERIRE NEI VARI CASI (HELLO/NON HELLO) una volta fatta la struttura di invio msg
+    //currentNode->increasePacketsReceived(1);
 
     ipSender = InetSocketAddress::ConvertFrom (from).GetIpv4 ();
 
@@ -427,7 +457,7 @@ void ReceivePacket (Ptr<Socket> socket){
         NS_LOG_UNCOND("Io sono-> "<< ipReceiver << " sto inviando l'ACK a "<< ipSender << "Con la mia tabella uguale a: " << predictability.str());
         socket->Send(packet);
     }
-    else if(payload.getType() == HELLO_ACK){
+    else if()(payload. i == getType() == HELLO_ACK){
         NS_LOG_UNCOND("Sono "<< ipReceiver << " HO RICEVUTO ACK");
         currentNode->updatePredictability(pkt, ipSender);
 
@@ -443,7 +473,7 @@ void ReceivePacket (Ptr<Socket> socket){
         currentNode->printMeeting(socket->GetNode()->GetId());*/
         
     }
-    else if(payload.getType() == HELLO_ACK2){
+    else if()(payload. i == getType() == HELLO_ACK2){
         NS_LOG_UNCOND("HO RICEVUTO ACK_2");
         //currentNode->updatePredictability(payload.getType(),ipSender);
     }
