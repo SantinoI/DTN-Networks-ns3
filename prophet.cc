@@ -243,7 +243,7 @@ class NodeHandler {
         NS_LOG_UNCOND("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
     }
 
-    void updatePredictability(Ptr<Packet> packet, Ipv4Address ip) {
+    void updatePredictability(Ptr<Packet> packet, Ipv4Address ip, Ipv4Address currentIp) {
         uint8_t *buffer = new uint8_t[packet->GetSize()];
         packet->CopyData(buffer, packet->GetSize());
         std::string stringPayload = std::string((char *)buffer);
@@ -319,25 +319,27 @@ class NodeHandler {
                 std::vector<std::string> recValue = splitString(payloadData[j], ":");
                 for (int i = 0; i < lenPredictability; i++) {
                     std::vector<std::string> oldValue = splitString(predictability[i], ":");
+                    if (currentIp != ns3::Ipv4Address(recValue[0].c_str())){ //attuo tutto il procedimento solo se l'ip che sto controllando non è il mio
+                        // NS_LOG_UNCOND("oldValue " << oldValue[0].c_str() << " recValue " << recValue[0].c_str());
+                        if (ns3::Ipv4Address(oldValue[0].c_str()) == ns3::Ipv4Address(recValue[0].c_str())) {
+                            float transValue = atof(oldValue[1].c_str()) + (1 - atof(oldValue[1].c_str())) * newValue * atof(recValue[1].c_str()) * 0.25;  // i dont know how much is Beta
 
-                    // NS_LOG_UNCOND("oldValue " << oldValue[0].c_str() << " recValue " << recValue[0].c_str());
-                    if (ns3::Ipv4Address(oldValue[0].c_str()) == ns3::Ipv4Address(recValue[0].c_str())) {
-                        float transValue = atof(oldValue[1].c_str()) + (1 - atof(oldValue[1].c_str())) * newValue * atof(recValue[1].c_str()) * 0.25;  // i dont know how much is Beta
-
-                        if (transValue > atof(oldValue[1].c_str())) {  //non so se questo controllo si deve fare onestamente, ad intuito direi di si (me lo prendo solo se migliore di quello che ho già)
+                            if (transValue > atof(oldValue[1].c_str())) {  //non so se questo controllo si deve fare onestamente, ad intuito direi di si (me lo prendo solo se migliore di quello che ho già)
+                                std::ostringstream newEntry;
+                                newEntry << oldValue[0] << ":" << transValue;
+                                // NS_LOG_UNCOND("1) New entry: " << newEntry.str());
+                                predictability[i] = newEntry.str();
+                            }
+                            break;
+                        } else if (i == ((int)predictability.size()) - 1) {
+                            //New record to be added
                             std::ostringstream newEntry;
-                            newEntry << oldValue[0] << ":" << transValue;
-                            // NS_LOG_UNCOND("1) New entry: " << newEntry.str());
-                            predictability[i] = newEntry.str();
-                        }
-                        break;
-                    } else if (i == ((int)predictability.size()) - 1) {
-                        //New record to be added
-                        std::ostringstream newEntry;
-                        float transValue = newValue * atof(recValue[1].c_str()) * 0.25;
-                        newEntry << recValue[0] << ":" << transValue;
-                        // NS_LOG_UNCOND("2) New entry: " << newEntry.str());
-                        predictability.push_back(newEntry.str());
+
+                            float transValue = newValue * atof(recValue[1].c_str()) * 0.25;
+                            newEntry << recValue[0] << ":" << transValue;
+                            // NS_LOG_UNCOND("2) New entry: " << newEntry.str());
+                            predictability.push_back(newEntry.str());
+                        } 
                     }
                 }
             }
@@ -461,7 +463,7 @@ void ReceivePacket(Ptr<Socket> socket) {
         payload.fromPacket(pkt);
 
         if (payload.getType() == HELLO) {
-            currentNode->updatePredictability(pkt, ipSender);
+            currentNode->updatePredictability(pkt, ipSender, ipReceiver);
             std::ostringstream predictability = currentNode->getPredictability();
             payload.setType(HELLO_ACK);
             // NS_LOG_UNCOND("Io sono -> " << ipReceiver << " Ho ricevuto un HELLO da " << ipSender << " sto mandando alla funzione toPacketFromString: -> " << predictability.str());
@@ -472,7 +474,7 @@ void ReceivePacket(Ptr<Socket> socket) {
             socket->Send(packet);
         } else if (payload.getType() == HELLO_ACK) {
             // NS_LOG_UNCOND("Sono " << ipReceiver << " HO RICEVUTO ACK");
-            currentNode->updatePredictability(pkt, ipSender);
+            currentNode->updatePredictability(pkt, ipSender, ipReceiver);
 
             std::ostringstream predictability = currentNode->getPredictability();
 
