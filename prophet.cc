@@ -146,6 +146,8 @@ class PayLoadConstructor {
 
 class NodeHandler {
    private:
+    int nodeid;
+
     double bytesSent;
     int packetsSent;
     double bytesReceived;
@@ -166,7 +168,8 @@ class NodeHandler {
     std::vector<PayLoadConstructor> bufferPackets;
 
    public:
-    NodeHandler() {
+    NodeHandler(int _nodeid) {
+        nodeid = _nodeid;
         bytesSent = 0.00;
         packetsSent = 0;
         bytesReceived = 0.0;
@@ -228,12 +231,16 @@ class NodeHandler {
         return msg;
     }
     std::vector<std::string> getPredictabilityAsArray() { return predictability; };
-    void printPredictability() {
-        std::ostringstream msg;
+    void printPredictability(int nodeid) {
+        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\tPredictability of node: " << nodeid);
+        NS_LOG_UNCOND("_________________________________");
+        NS_LOG_UNCOND("| ADDRESS \t || PREDICT \t|");
+        NS_LOG_UNCOND("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
         for (int i = 0; i < (int)predictability.size(); i++) {
-            msg << predictability[i] << ";";
+            std::vector<std::string> singlePredict = splitString(predictability[i], ":");
+            NS_LOG_UNCOND("| " << singlePredict[0] << " \t || " << singlePredict[1]);
         }
-        NS_LOG_UNCOND("Predictability del nodo è " << msg.str());
+        NS_LOG_UNCOND("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
     }
 
     void updatePredictability(Ptr<Packet> packet, Ipv4Address ip) {
@@ -335,7 +342,7 @@ class NodeHandler {
                 }
             }
             // NS_LOG_UNCOND("FINE AGGIORNAMENTO DOPO TRANSITIVA");
-            // printPredictability();
+            printPredictability(nodeid);
         }
     }
 
@@ -485,6 +492,7 @@ void ReceivePacket(Ptr<Socket> socket) {
             std::vector<PayLoadConstructor> bufferPackets = currentNode->getPacketsBuffer();
             for (int buffIndex = 0; buffIndex < (int)bufferPackets.size(); buffIndex++) {
                 NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " ho un pacchetto da recapitare a " << bufferPackets[buffIndex].getDestinationAddress());
+                currentNode->printPredictability(socket->GetNode()->GetId());
                 if(bufferPackets[buffIndex].getTtl() == 0){
                     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " ho un pacchetto da recapitare a " << bufferPackets[buffIndex].getDestinationAddress() << " si ma il pacchetto ha TTL 0 , che facciamo?");
                 }
@@ -506,6 +514,7 @@ void ReceivePacket(Ptr<Socket> socket) {
                         break;
                     } else {
                         std::vector<std::string> currentNodePredictability = currentNode->getPredictabilityAsArray();
+                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Payload ricevuto " << stringPayload << " da: " << ipSender);
                         for (int currentPredict = 0; currentPredict < (int)currentNodePredictability.size(); currentPredict++) {
                             std::vector<std::string> currentValues = splitString(currentNodePredictability[currentPredict], ":");
                             if (ns3::Ipv4Address(currentValues[0].c_str()) == bufferPackets[buffIndex].getDestinationAddress()) {
@@ -513,7 +522,6 @@ void ReceivePacket(Ptr<Socket> socket) {
                                 // Here we have the current predict for current payload (packet) and current node.
                                 // Going to search if the other nodes have a great predict
                                 std::vector<std::string> dataPayload = value; // Packet already open on top
-                                NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Payload ricevuto " << stringPayload << " da: " << ipSender);
 
                                 // Skip 1 because at index 1 we have the type payload, -1 because the string end with ;
                                 for (int tableIndex = 1; tableIndex < (int)dataPayload.size() - 1; tableIndex++) {
@@ -603,7 +611,7 @@ int main(int argc, char *argv[]) {
 
     uint32_t numPackets = 2;
     uint32_t numNodes = 100;  // by default, 50
-    uint32_t sinkNode = 45;
+    uint32_t sinkNode = 81;
     uint32_t sourceNode = 7;
 
     uint32_t TTL = 6;
@@ -687,7 +695,7 @@ int main(int argc, char *argv[]) {
 
     Ptr<Socket> recvSinkArray[numNodes];
     for (uint32_t i = 0; i < numNodes; ++i) {
-        nodeHandlerArray.push_back(*new NodeHandler());
+        nodeHandlerArray.push_back(*new NodeHandler(c.Get(i)->GetId()));
         recvSinkArray[i] = Socket::CreateSocket(c.Get(i), tid);
         recvSinkArray[i]->Bind(local);
         recvSinkArray[i]->SetRecvCallback(MakeCallback(&ReceivePacket));
@@ -710,7 +718,7 @@ int main(int argc, char *argv[]) {
     anim.UpdateNodeDescription(c.Get(sourceNode), "Sender");
     anim.UpdateNodeDescription(c.Get(sinkNode), "Receiver");
 
-    Simulator::Stop(Seconds(1000.0));
+    Simulator::Stop(Seconds(5000.0));
 
     Simulator::Run();
     Simulator::Destroy();
