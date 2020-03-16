@@ -568,7 +568,14 @@ void ReceivePacket(Ptr<Socket> socket) {
                 if((payload.getDestinationAddress() != ipReceiver)){
                     payload.setType(STANDARD);  // Also done in savePacketsInBuffer
                     currentNode->savePacketsInBuffer(payload);
-                }else NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " aohu mbare il pacchetto è pemméé - from: " << ipSender << " with ttl: " << payload.getTtl() << " and uid: " << payload.getUid());
+                }else {
+                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " aohu mbare il pacchetto è pemméé - from: " << ipSender << " with ttl: " << payload.getTtl() << " and uid: " << payload.getUid());
+                    if (dataForPackets[payload.getUid()].delivered != true){  // Prevent multiple logs for the same pkg receiver more times
+                        dataForPackets[payload.getUid()].delivered = true;
+                        dataForPackets[payload.getUid()].delivered_at = Simulator::Now().GetSeconds();
+                        dataForPackets[payload.getUid()].hops = payload.getTtl();
+                    }
+                }
                 payload.setType(PKTACK);
                 std::ostringstream newcontent = payload.toString();
                 Ptr<Packet> packet = payload.toPacketFromString(newcontent);
@@ -614,7 +621,7 @@ int main(int argc, char *argv[]) {
     // uint32_t gridWidth = 10;
     // double distance = 150;  // m
 
-    uint32_t numPackets = 2;
+    uint32_t numPackets = 1;
     uint32_t numNodes = 100;  // by default, 50
     uint32_t sinkNode = 81;
     uint32_t sourceNode = 7;
@@ -708,15 +715,21 @@ int main(int argc, char *argv[]) {
         recvSinkArray[i]->SetAllowBroadcast(true);
         recvSinkArray[i]->Connect(broadcast);
 
-        Simulator::Schedule(Seconds(10 * i), &GenerateHello,
+        Simulator::Schedule(Seconds(1 * i), &GenerateHello,
                             recvSinkArray[i]);
     }
 
     Ipv4InterfaceAddress iaddr = c.Get(sinkNode)->GetObject<Ipv4>()->GetAddress(1, 0);
     Ipv4Address destinationAddress = iaddr.GetLocal();
 
-    Simulator::Schedule(Seconds(500), &GeneratePacket,
-                        c.Get(sourceNode)->GetId(), destinationAddress, TTL, UID);
+    for (uint32_t i = 0; i < numPackets; i++) {
+        PacketLogData dataPacket = {false, 0.00, 0.00, 0};
+        dataForPackets.push_back(dataPacket);
+        Simulator::Schedule(Seconds(250 + (10 * i)), &GeneratePacket,
+                            c.Get(sourceNode)->GetId(), destinationAddress, TTL, UID);
+
+        UID += 1;
+    }
 
     AnimationInterface anim("prophet-anim.xml");
 
