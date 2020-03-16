@@ -487,6 +487,8 @@ void ReceivePacket(Ptr<Socket> socket) {
             currentNode->pushInMeeting(ipSender, Simulator::Now().GetSeconds());
             currentNode->printMeeting(socket->GetNode()->GetId());
             */
+        } else if(payload.getType() == HELLO_ACK2){
+            currentNode->updatePredictability(pkt, ipSender, ipReceiver);
         }
 
         // We have complete the exchange of predictability, ready for sent the package propose.
@@ -612,9 +614,9 @@ int main(int argc, char *argv[]) {
     // double distance = 150;  // m
 
     uint32_t numPackets = 2;
-    uint32_t numNodes = 100;  // by default, 50
-    uint32_t sinkNode = 81;
-    uint32_t sourceNode = 7;
+    uint32_t numNodes = 10;  // by default, 50
+    uint32_t sinkNode = 1;
+    uint32_t sourceNode = 0;
 
     uint32_t TTL = 6;
     uint32_t UID = 0;
