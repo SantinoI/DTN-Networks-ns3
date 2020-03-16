@@ -42,7 +42,6 @@ typedef struct {
     bool delivered;
     double start;
     double delivered_at;
-    int hops;
 } PacketLogData;
 
 // Struttura di incontri
@@ -265,25 +264,23 @@ class NodeHandler {
                     newEntry << ip << ":" << newValue;
                     //predictability.push_back(newEntry.str());
                     predictability.at(i) = newEntry.str();
+                    break;
                 }
+
             }
             if (exist == false) {
                 std::ostringstream newEntry;
-                newEntry << ip << ":"
-                         << "0";
+                newEntry << ip << ":" << "0.75";
                 predictability.push_back(newEntry.str());
             }
         } else if (type == HELLO_ACK) {
             // Aggiorno il tempo trascorso dall'ultimo invecchiamento
             float deltaAging = getLasMeeting(Simulator::Now().GetSeconds(), ip);
+            bool exist = false;
 
             for (int i = 0; i < (int)predictability.size(); i++) {
                 std::vector<std::string> oldValue = splitString(predictability[i], ":");
 
-                if (ns3::Ipv4Address(oldValue[0].c_str()) == ip && i == (int)predictability.size()) {  //NB: questa condizione non verrà verificata mai
-                    NS_LOG_UNCOND("Ho trovato l'ip che devo saltare :" << oldValue[0].c_str() << " Faccio il break con i = " << i);
-                    break;
-                }
                 if (ns3::Ipv4Address(oldValue[0].c_str()) != ip) {
                     //if(ns3::Ipv4Address(oldValue[0].c_str()) == ip && i == (int)predictability.size()) break;
                     float newValue = atof(oldValue[1].c_str()) * (pow(0.98, deltaAging));
@@ -294,10 +291,13 @@ class NodeHandler {
                     // NS_LOG_UNCOND("New entry: " << newEntry.str());
                     //predictability.insert(predictability.begin()+i,newEntry.str());
                     predictability[i] = newEntry.str();
-                }
+                }else exist = true;
             }
-            // NS_LOG_UNCOND("FINE AGGIORNAMENTO DOPO HELLO_ACK");
-            // printPredictability();
+            if (exist == false) {
+                std::ostringstream newEntry;
+                newEntry << ip << ":" << "0.75";
+                predictability.push_back(newEntry.str());
+            }
         }
         // Itera l'array predictability del nodo corrente. Dentro si itera PayloadData,
         // Predict[i] e payloadData[i] -- > split con :
@@ -432,7 +432,7 @@ static void GenerateHello(Ptr<Socket> socket) {
 
     socket->Send(packet);
 
-    Simulator::Schedule(Seconds(60), &GenerateHello, socket);
+    Simulator::Schedule(Seconds(10), &GenerateHello, socket);
 }
 
 void ReceivePacket(Ptr<Socket> socket) {
@@ -568,14 +568,7 @@ void ReceivePacket(Ptr<Socket> socket) {
                 if((payload.getDestinationAddress() != ipReceiver)){
                     payload.setType(STANDARD);  // Also done in savePacketsInBuffer
                     currentNode->savePacketsInBuffer(payload);
-                }else {
-                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " aohu mbare il pacchetto è pemméé - from: " << ipSender << " with ttl: " << payload.getTtl() << " and uid: " << payload.getUid());
-                    if (dataForPackets[payload.getUid()].delivered != true){  // Prevent multiple logs for the same pkg receiver more times
-                        dataForPackets[payload.getUid()].delivered = true;
-                        dataForPackets[payload.getUid()].delivered_at = Simulator::Now().GetSeconds();
-                        dataForPackets[payload.getUid()].hops = payload.getTtl();
-                    }
-                }
+                }else NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " aohu mbare il pacchetto è pemméé - from: " << ipSender << " with ttl: " << payload.getTtl() << " and uid: " << payload.getUid());
                 payload.setType(PKTACK);
                 std::ostringstream newcontent = payload.toString();
                 Ptr<Packet> packet = payload.toPacketFromString(newcontent);
@@ -622,9 +615,9 @@ int main(int argc, char *argv[]) {
     // double distance = 150;  // m
 
     uint32_t numPackets = 2;
-    uint32_t numNodes = 10;  // by default, 50
-    uint32_t sinkNode = 1;
-    uint32_t sourceNode = 0;
+    uint32_t numNodes = 100;  // by default, 50
+    uint32_t sinkNode = 81;
+    uint32_t sourceNode = 7;
 
     uint32_t TTL = 6;
     uint32_t UID = 0;
@@ -722,14 +715,8 @@ int main(int argc, char *argv[]) {
     Ipv4InterfaceAddress iaddr = c.Get(sinkNode)->GetObject<Ipv4>()->GetAddress(1, 0);
     Ipv4Address destinationAddress = iaddr.GetLocal();
 
-    for (uint32_t i = 0; i < numPackets; i++) {
-        PacketLogData dataPacket = {false, 0.00, 0.00, 0};
-        dataForPackets.push_back(dataPacket);
-        Simulator::Schedule(Seconds(500 + (10 * i)), &GeneratePacket,
-                            c.Get(sourceNode)->GetId(), destinationAddress, TTL, UID);
-
-        UID += 1;
-    }
+    Simulator::Schedule(Seconds(500), &GeneratePacket,
+                        c.Get(sourceNode)->GetId(), destinationAddress, TTL, UID);
 
     AnimationInterface anim("prophet-anim.xml");
 
