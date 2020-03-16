@@ -251,6 +251,8 @@ class NodeHandler {
         std::vector<std::string> payloadData = splitString(stringPayload, ";");
         int type = atoi(payloadData[0].c_str());
 
+        // if (nodeid == 7 || nodeid == 81) NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << nodeid << " | " << currentIp << " Payload ricevuto " << stringPayload << " da: " << ip);
+
         if (type == HELLO) {
             bool exist = false;
             for (int i = 0; i < (int)predictability.size(); i++) {
@@ -346,7 +348,7 @@ class NodeHandler {
                 }
             }
             // NS_LOG_UNCOND("FINE AGGIORNAMENTO DOPO TRANSITIVA");
-            printPredictability(nodeid);
+            // printPredictability(nodeid);
         }
     }
 
@@ -419,10 +421,9 @@ static void GenerateHello(Ptr<Socket> socket) {
 
     // NodeHandler *currentNode = &nodeHandlerArray[socket->GetNode()->GetId()];
 
-    /*
-    PayLoadConstructor payload = PayLoadConstructor(HELLO);
-    Ptr<Packet> packet = payload.toPacket();
-    */
+    InetSocketAddress broadcast = InetSocketAddress(Ipv4Address("255.255.255.255"), 80);
+    socket->SetAllowBroadcast(true);
+    socket->Connect(broadcast);
 
     std::ostringstream msg;
     msg << HELLO;
@@ -433,7 +434,7 @@ static void GenerateHello(Ptr<Socket> socket) {
 
     socket->Send(packet);
 
-    Simulator::Schedule(Seconds(10), &GenerateHello, socket);
+    Simulator::Schedule(Seconds(60), &GenerateHello, socket);
 }
 
 void ReceivePacket(Ptr<Socket> socket) {
@@ -704,7 +705,7 @@ int main(int argc, char *argv[]) {
 
     TypeId tid = TypeId::LookupByName("ns3::UdpSocketFactory");
     InetSocketAddress local = InetSocketAddress(Ipv4Address::GetAny(), 80);
-    InetSocketAddress broadcast = InetSocketAddress(Ipv4Address("255.255.255.255"), 80);
+    // InetSocketAddress broadcast = InetSocketAddress(Ipv4Address("255.255.255.255"), 80);
 
     Ptr<Socket> recvSinkArray[numNodes];
     for (uint32_t i = 0; i < numNodes; ++i) {
@@ -713,8 +714,8 @@ int main(int argc, char *argv[]) {
         recvSinkArray[i]->Bind(local);
         recvSinkArray[i]->SetRecvCallback(MakeCallback(&ReceivePacket));
 
-        recvSinkArray[i]->SetAllowBroadcast(true);
-        recvSinkArray[i]->Connect(broadcast);
+        // recvSinkArray[i]->SetAllowBroadcast(true);
+        // recvSinkArray[i]->Connect(broadcast);
 
         Simulator::Schedule(Seconds(1 * i), &GenerateHello,
                             recvSinkArray[i]);
@@ -733,11 +734,12 @@ int main(int argc, char *argv[]) {
     }
 
     AnimationInterface anim("prophet-anim.xml");
+    anim.SetMaxPktsPerTraceFile(500000);
 
     anim.UpdateNodeDescription(c.Get(sourceNode), "Sender");
     anim.UpdateNodeDescription(c.Get(sinkNode), "Receiver");
 
-    Simulator::Stop(Seconds(1000.0));
+    Simulator::Stop(Seconds(500.0));
 
     Simulator::Run();
     Simulator::Destroy();
