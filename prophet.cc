@@ -42,6 +42,7 @@ typedef struct {
     bool delivered;
     double start;
     double delivered_at;
+    int hops;
 } PacketLogData;
 
 // Struttura di incontri
@@ -736,7 +737,7 @@ int main(int argc, char *argv[]) {
     anim.UpdateNodeDescription(c.Get(sourceNode), "Sender");
     anim.UpdateNodeDescription(c.Get(sinkNode), "Receiver");
 
-    Simulator::Stop(Seconds(5000.0));
+    Simulator::Stop(Seconds(1000.0));
 
     Simulator::Run();
     Simulator::Destroy();
