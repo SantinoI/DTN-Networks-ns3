@@ -61,23 +61,16 @@ def start_simulation(cmd, n, output):
 
 if __name__ == "__main__":
     default_args = "--sinkNode=14 --sourceNode=0 --seed=114 --simulationTime=1000 --sendAfter=250"
-    commands_list = [
-        "scratch/prophet --numNodes=15 --numPackets=3 {}".format(default_args),
-        "scratch/prophet --numNodes=20 --numPackets=3 {}".format(default_args),
-        "scratch/prophet --numNodes=30 --numPackets=3 {}".format(default_args),
-        "scratch/prophet --numNodes=40 --numPackets=3 {}".format(default_args),
-        "scratch/prophet --numNodes=50 --numPackets=3 {}".format(default_args),
-        "scratch/prophet --numNodes=70 --numPackets=3 {}".format(default_args),
-        "scratch/prophet --numNodes=90 --numPackets=3 {}".format(default_args),
+    alghoritms_fname = ["prophet", "wifi-simple-adhoc-grid-anim"]
+    num_packets = 3
+    num_nodes_chunk = [15, 20, 30, 40, 50, 70, 90, 110, 130, 150, 200, 250, 500]
+    commands_list = []
+    for alghname in alghoritms_fname:
+        for nnodes in num_nodes_chunk:
+            commands_list.append("scratch/{} --numNodes={} --numPackets={} {}".format(alghname, nnodes, num_packets, default_args))
 
-        "scratch/wifi-simple-adhoc-grid-anim --numNodes=15 --numPackets=3 {}".format(default_args),
-        "scratch/wifi-simple-adhoc-grid-anim --numNodes=20 --numPackets=3 {}".format(default_args),
-        "scratch/wifi-simple-adhoc-grid-anim --numNodes=30 --numPackets=3 {}".format(default_args),
-        "scratch/wifi-simple-adhoc-grid-anim --numNodes=40 --numPackets=3 {}".format(default_args),
-        "scratch/wifi-simple-adhoc-grid-anim --numNodes=50 --numPackets=3 {}".format(default_args),
-        "scratch/wifi-simple-adhoc-grid-anim --numNodes=70 --numPackets=3 {}".format(default_args),
-        "scratch/wifi-simple-adhoc-grid-anim --numNodes=90 --numPackets=3 {}".format(default_args),
-    ]
+    logger.info("Ready for start {} commands: {}".format(len(commands_list), "\n» " + "\n» ".join(commands_list)))
+    time.sleep(15)
     outputs = []
 
     if not os.path.exists(CURRENT_PATH + "/aio-simulator"):
