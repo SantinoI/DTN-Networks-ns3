@@ -225,8 +225,7 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UI
     NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ipSender << "\tGoing to send packet with uid: " << UID);
 
     socket->Send (packet);
-    if(previousAddressUid.compare(createStringAddressUid(ipSender, (int)UID, ";")) == 0)
-      dataForPackets[UID].start = Simulator::Now().GetSeconds();
+    if(dataForPackets[UID].start == 0) dataForPackets[UID].start = Simulator::Now().GetSeconds();
 
     currentNode->pushInStack(UID);
     currentNode->increaseBytesSent((double)packet->GetSize());
@@ -308,13 +307,16 @@ int main (int argc, char *argv[]){
   std::string phyMode ("DsssRate1Mbps");
   //uint32_t gridWidth = 10;
   // double distance = 150;  // m
-  
+  double simulationTime = 5000.00;
+  uint32_t seed = 91;
+  uint32_t sendAfter = 300;
+
   uint32_t numPackets = 2;
   uint32_t numNodes = 80;  // by default, 50
   uint32_t sinkNode = 45;
   uint32_t sourceNode = 44;
 
-  uint32_t TTL = 6;
+  uint32_t TTL = 10;
   uint32_t UID = 0;
 
   double rss = -80;  // -dBm
@@ -322,11 +324,14 @@ int main (int argc, char *argv[]){
   CommandLine cmd;
   cmd.AddValue ("phyMode", "Wifi Phy mode", phyMode);
   // cmd.AddValue ("distance", "distance (m)", distance);
-  cmd.AddValue ("numPackets", "number of packets generated", numPackets);
-  cmd.AddValue ("numNodes", "number of nodes", numNodes);
+  cmd.AddValue ("numPackets", "Number of packets generated", numPackets);
+  cmd.AddValue ("numNodes", "Number of nodes", numNodes);
   cmd.AddValue ("sinkNode", "Receiver node number", sinkNode);
   cmd.AddValue ("sourceNode", "Sender node number", sourceNode);
   cmd.AddValue ("ttl", "TTL For each packet", TTL);
+  cmd.AddValue ("seed", "Custom seed for simulation", seed);
+  cmd.AddValue ("simulationTime", "Set a custom time (s) for simulation", simulationTime);
+  cmd.AddValue ("sendAfter", "Send the first pkt after", sendAfter);
 
   cmd.AddValue ("rss", "received signal strength", rss);
   cmd.Parse (argc, argv);
@@ -338,7 +343,7 @@ int main (int argc, char *argv[]){
   NodeContainer c;
   c.Create (numNodes);
 
-  SeedManager::SetSeed (91);
+  SeedManager::SetSeed(seed);
 
   // The below set of helpers will help us to put together the wifi NICs we want
   WifiHelper wifi;
@@ -459,13 +464,14 @@ int main (int argc, char *argv[]){
 
     PacketLogData dataPacket = {false, 0.00, 0.00};
     dataForPackets.push_back(dataPacket);
-    Simulator::Schedule(Seconds(300 * i), &GenerateTraffic,
+    Simulator::Schedule(Seconds(sendAfter * i), &GenerateTraffic,
                         source, packet, UID, createStringAddressUid(ipSender, (int)UID, ";"));
 
     UID += 1;
   }
 
   AnimationInterface anim("adhoc-grid.xml");
+  anim.SetMaxPktsPerTraceFile(500000);
 
   /*
     int x=0, y=0;
@@ -482,14 +488,18 @@ int main (int argc, char *argv[]){
   anim.UpdateNodeDescription(c.Get(sourceNode),"Sender");
   anim.UpdateNodeDescription(c.Get(sinkNode),"Receiver");
 
-  Simulator::Stop (Seconds (7000.0));
+  Simulator::Stop(Seconds(simulationTime));
 
   Simulator::Run ();
   Simulator::Destroy ();
 
   int deliveredCounter = 0;
-  for (int i = 0; i < (int)dataForPackets.size(); i++){
-    if(dataForPackets[i].delivered == true) deliveredCounter++;
+  for (int i = 0; i < (int)dataForPackets.size(); i++) {
+    if (dataForPackets[i].delivered == true) {
+      deliveredCounter++;
+      NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << (double)(dataForPackets[i].delivered_at - dataForPackets[i].start));
+    }
+    else NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << 0);
   }
   NS_LOG_UNCOND("- Packets sent: \t" << (int)dataForPackets.size());
   NS_LOG_UNCOND("- Packets delivered: \t" << deliveredCounter);

@@ -614,6 +614,7 @@ static void GeneratePacket(int nodeId, Ipv4Address destinationAddress, uint32_t 
     payload.setDestinationAddress(destinationAddress);
 
     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << nodeId << " Create a new Packets for: " << destinationAddress << " with ttl: " << ttl << " and uid: " << uid);
+    if(dataForPackets[uid].start == 0) dataForPackets[uid].start = Simulator::Now().GetSeconds();
 
     currentNode->savePacketsInBuffer(payload);
 }
@@ -622,6 +623,9 @@ int main(int argc, char *argv[]) {
     std::string phyMode("DsssRate1Mbps");
     // uint32_t gridWidth = 10;
     // double distance = 150;  // m
+    double simulationTime = 5000.00;
+    uint32_t seed = 14;
+    uint32_t sendAfter = 300;
 
     uint32_t numPackets = 1;
     uint32_t numNodes = 100;  // by default, 50
@@ -641,6 +645,9 @@ int main(int argc, char *argv[]) {
     cmd.AddValue("sinkNode", "Receiver node number", sinkNode);
     cmd.AddValue("sourceNode", "Sender node number", sourceNode);
     cmd.AddValue("ttl", "TTL For each packet", TTL);
+    cmd.AddValue("seed", "Custom seed for simulation", seed);
+    cmd.AddValue("simulationTime", "Set a custom time (s) for simulation", simulationTime);
+    cmd.AddValue("sendAfter", "Send the first pkt after", sendAfter);
 
     cmd.AddValue("rss", "received signal strength", rss);
     cmd.Parse(argc, argv);
@@ -652,7 +659,7 @@ int main(int argc, char *argv[]) {
     NodeContainer c;
     c.Create(numNodes);
 
-    SeedManager::SetSeed(14);
+    SeedManager::SetSeed(seed);
 
     // The below set of helpers will help us to put together the wifi NICs we want
     WifiHelper wifi;
@@ -727,7 +734,7 @@ int main(int argc, char *argv[]) {
     for (uint32_t i = 0; i < numPackets; i++) {
         PacketLogData dataPacket = {false, 0.00, 0.00, 0};
         dataForPackets.push_back(dataPacket);
-        Simulator::Schedule(Seconds(250 + (10 * i)), &GeneratePacket,
+        Simulator::Schedule(Seconds(sendAfter + (10 * i)), &GeneratePacket,
                             c.Get(sourceNode)->GetId(), destinationAddress, TTL, UID);
 
         UID += 1;
@@ -739,14 +746,18 @@ int main(int argc, char *argv[]) {
     anim.UpdateNodeDescription(c.Get(sourceNode), "Sender");
     anim.UpdateNodeDescription(c.Get(sinkNode), "Receiver");
 
-    Simulator::Stop(Seconds(500.0));
+    Simulator::Stop(Seconds(simulationTime));
 
     Simulator::Run();
     Simulator::Destroy();
 
     int deliveredCounter = 0;
     for (int i = 0; i < (int)dataForPackets.size(); i++) {
-        if (dataForPackets[i].delivered == true) deliveredCounter++;
+        if (dataForPackets[i].delivered == true) {
+            deliveredCounter++;
+            NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << (double)(dataForPackets[i].delivered_at - dataForPackets[i].start));
+        }
+        else NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << 0);
     }
     NS_LOG_UNCOND("- Packets sent: \t" << (int)dataForPackets.size());
     NS_LOG_UNCOND("- Packets delivered: \t" << deliveredCounter);
