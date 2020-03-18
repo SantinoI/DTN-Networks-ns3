@@ -6,9 +6,8 @@ import logging
 import datetime
 import time
 import subprocess
+import multiprocessing
 import matplotlib.pyplot as plt
-
-from multiprocessing import Process
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - [%(funcName)s]: %(message)s", datefmt="%d/%m %H:%M:%S", level=logging.INFO,
@@ -27,17 +26,29 @@ NS3PATH = "/home/alessandro/Documents/ns-allinone-3.30.1/ns-3.30.1/"
 CURRENT_PATH = os.path.abspath(os.getcwd())
 
 FINAL_REPORT = [
-    "- Packets sent:",
+    # "- Packets sent:",
     "- Packets delivered:",
     "- Delivery percentage:",
-    "- Total BytesSent:",
-    "- Total BytesReceived:",
-    "- Total PacketsSent:",
-    "- Total PacketsReceived:"
+    # "- Total BytesSent:",
+    # "- Total BytesReceived:",
+    # "- Total PacketsSent:",
+    # "- Total PacketsReceived:",
 ]
 
+
+def update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes):
+    if alghname not in dataforplot:
+        dataforplot[alghname] = {}
+    value = single_line.replace(match_string, "").strip()
+    studycase = match_string.replace("-", "").replace(":", "").strip()
+    if studycase not in dataforplot[alghname]:
+        dataforplot[alghname][studycase] = []
+    dataforplot[alghname][studycase].append({"x": float(nnodes.strip()), "y": float(value.replace("%", "").strip())})
+    return dataforplot
+
+
 def start_simulation(cmd, n, output):
-    logger.info("{}) START - {}.".format(str(n).zfill(2), cmd))
+    logger.info("{}) RUN - {}.".format(str(n).zfill(2), cmd))
     checkpoint = datetime.datetime.now()
     fullcmd = './waf --run "{}" > {} 2>&1'.format(cmd, output)
     time.sleep(1)
@@ -49,29 +60,23 @@ def start_simulation(cmd, n, output):
 
 
 if __name__ == "__main__":
+    default_args = "--sinkNode=14 --sourceNode=0 --seed=114 --simulationTime=1000 --sendAfter=250"
     commands_list = [
-        'scratch/prophet --numNodes=15 --numPackets=5 --sinkNode=14 --sourceNode=1',
-        'scratch/prophet --numNodes=20 --numPackets=5 --sinkNode=14 --sourceNode=1',
-        'scratch/prophet --numNodes=30 --numPackets=5 --sinkNode=14 --sourceNode=1',
-        'scratch/prophet --numNodes=40 --numPackets=5 --sinkNode=14 --sourceNode=1',
-        'scratch/prophet --numNodes=50 --numPackets=5 --sinkNode=14 --sourceNode=1',
-        'scratch/prophet --numNodes=70 --numPackets=5 --sinkNode=14 --sourceNode=1',
-        'scratch/prophet --numNodes=90 --numPackets=5 --sinkNode=14 --sourceNode=1',
+        "scratch/prophet --numNodes=15 --numPackets=3 {}".format(default_args),
+        "scratch/prophet --numNodes=20 --numPackets=3 {}".format(default_args),
+        "scratch/prophet --numNodes=30 --numPackets=3 {}".format(default_args),
+        "scratch/prophet --numNodes=40 --numPackets=3 {}".format(default_args),
+        "scratch/prophet --numNodes=50 --numPackets=3 {}".format(default_args),
+        "scratch/prophet --numNodes=70 --numPackets=3 {}".format(default_args),
+        "scratch/prophet --numNodes=90 --numPackets=3 {}".format(default_args),
 
-        'scratch/wifi-simple-adhoc-grid-anim --numNodes=15 --numPackets=5 --sinkNode=14 --sourceNode=1',
-        'scratch/wifi-simple-adhoc-grid-anim --numNodes=20 --numPackets=5 --sinkNode=14 --sourceNode=1',
-        'scratch/wifi-simple-adhoc-grid-anim --numNodes=30 --numPackets=5 --sinkNode=14 --sourceNode=1',
-        'scratch/wifi-simple-adhoc-grid-anim --numNodes=40 --numPackets=5 --sinkNode=14 --sourceNode=1',
-        'scratch/wifi-simple-adhoc-grid-anim --numNodes=50 --numPackets=5 --sinkNode=14 --sourceNode=1',
-        'scratch/wifi-simple-adhoc-grid-anim --numNodes=70 --numPackets=5 --sinkNode=14 --sourceNode=1',
-        'scratch/wifi-simple-adhoc-grid-anim --numNodes=90 --numPackets=5 --sinkNode=14 --sourceNode=1'
-
-        # 'scratch/wifi-simple-adhoc-grid-anim --numNodes=50 --ttl=4 --sinkNode=14 --sourceNode=1'
-        # 'scratch/wifi-simple-adhoc-grid-anim --numNodes=50 --ttl=5 --sinkNode=14 --sourceNode=1'
-        # 'scratch/wifi-simple-adhoc-grid-anim --numNodes=50 --ttl=6 --sinkNode=14 --sourceNode=1'
-        # 'scratch/wifi-simple-adhoc-grid-anim --numNodes=50 --ttl=7 --sinkNode=14 --sourceNode=1'
-        # 'scratch/wifi-simple-adhoc-grid-anim --numNodes=50 --ttl=8 --sinkNode=14 --sourceNode=1'
-        # 'scratch/wifi-simple-adhoc-grid-anim --numNodes=50 --ttl=9 --sinkNode=14 --sourceNode=1'
+        "scratch/wifi-simple-adhoc-grid-anim --numNodes=15 --numPackets=3 {}".format(default_args),
+        "scratch/wifi-simple-adhoc-grid-anim --numNodes=20 --numPackets=3 {}".format(default_args),
+        "scratch/wifi-simple-adhoc-grid-anim --numNodes=30 --numPackets=3 {}".format(default_args),
+        "scratch/wifi-simple-adhoc-grid-anim --numNodes=40 --numPackets=3 {}".format(default_args),
+        "scratch/wifi-simple-adhoc-grid-anim --numNodes=50 --numPackets=3 {}".format(default_args),
+        "scratch/wifi-simple-adhoc-grid-anim --numNodes=70 --numPackets=3 {}".format(default_args),
+        "scratch/wifi-simple-adhoc-grid-anim --numNodes=90 --numPackets=3 {}".format(default_args),
     ]
     outputs = []
 
@@ -81,55 +86,62 @@ if __name__ == "__main__":
     output_folder = CURRENT_PATH + "/aio-simulator/" + datetime.datetime.now().strftime("%d%m%Y%H%M%S")
     os.mkdir(output_folder)
 
+    max_process = int(multiprocessing.cpu_count() / 2)
     multiprocess = []
     for index in range(0, len(commands_list)):
-        fulloutput = output_folder + "/{}.out.txt".format(commands_list[index].replace("scratch/", "").replace(" ", "\ ").strip())
+        fulloutput = output_folder + "/{}.out.txt".format(
+            commands_list[index].replace("scratch/", "").replace(default_args, "").replace(" ", "\ ").strip()
+        )
         outputs.append(fulloutput)
-        multiprocess.append(Process(target=start_simulation, args=(commands_list[index], index+1, fulloutput)))
+        multiprocess.append(multiprocessing.Process(target=start_simulation, args=(commands_list[index], index + 1, fulloutput)))
         multiprocess[len(multiprocess) - 1].start()
-        time.sleep(5)
 
-    for index in range(0, len(multiprocess)):
-        multiprocess[index].join()
+        if len(multiprocess) == max_process:
+            multiprocess[0].join()
+            multiprocess.pop(0)
 
     dataforplot = {}
     for fname in outputs:
-        fname = fname.replace("\ ", " ")
+        fname = fname.replace("\ ", " ").replace("\\", "")
         with open(fname, "r") as f:
             outlines = f.readlines()
-        outlines = outlines[-15:]
+        outlines = outlines[-25:]  # ESAGERO
 
-        cmd = fname.split('/')[-1]
-        args = cmd.split(' ')
+        cmd = fname.split("/")[-1]
+        args = cmd.split(" ")
         # print(cmd, args)
 
         alghname = args[0]
-        if alghname not in dataforplot:
-            dataforplot[alghname] = {}
-
         nnodes = args[1].replace("--numNodes=", "")
 
+        # - Packets {} delta delivery:
         for match_string in FINAL_REPORT:
             for single_line in outlines:
                 if single_line.startswith(match_string):
-                    value = single_line.replace(match_string, '').strip()
-                    studycase = match_string.replace('-', '').replace(':', '').strip()
-                    if studycase not in dataforplot[alghname]:
-                        dataforplot[alghname][studycase] = []
-                    dataforplot[alghname][studycase].append({
-                        "x": float(nnodes.strip()),
-                        "y": float(value.replace('%', '').strip())
-                    })
-                    # print("{} \t {}".format(alghname, match_string, value, nnodes))
-                    # print("{} \t {}".format(value, nnodes))
+                    dataforplot = update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes)
                     break
 
+        npkts = args[1].replace("--numPackets=", "")
+        for npkt in range(1, len(npkts)+1):
+            founded = False
+            for single_line in outlines:
+                match_string = "- Packets {} delta delivery:".format(npkt)
+                if single_line.startswith(match_string):
+                    dataforplot = update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes)
+                    founded = True
+                    break
 
     for alghname in dataforplot:
         for studycase in dataforplot[alghname]:
-            plt.plot([item['x'] for item in dataforplot[alghname][studycase]], [item['y'] for item in dataforplot[alghname][studycase]])
-            plt.xlabel('Node number'.upper())
-            plt.ylabel(studycase.upper())
+            data_x = [item["x"] for item in dataforplot[alghname][studycase]]
+            data_y = [item["y"] for item in dataforplot[alghname][studycase]]
+            plt.plot(data_x, data_y)
+            plt.xlabel("Node number".upper())
+            studycase_str = studycase.upper().replace('-', '').replace(':', '')
+            plt.ylabel(studycase_str)
             plt.suptitle(alghname.upper())
+            logger.info("{} - {} - {} , {}".format(alghname, studycase_str, data_x, data_y))
+            plt_fname = "{}/{} - {}".format(output_folder, alghname, studycase_str)
+            plt.savefig('{}.png'.format(plt_fname))
+            # plt.savefig('{}.pdf'.format(plt_fname))
             plt.show()
-
