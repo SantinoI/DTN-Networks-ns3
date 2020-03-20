@@ -75,7 +75,7 @@ std::string createStringAddressUid(Ipv4Address address, int uid, std::string del
 class PayLoadConstructor {
    private:
     int type;
-    uint32_t ttl;
+    uint32_t hops;
     uint32_t uid;
     Ipv4Address destinationAddress;
     std::string delimiter;
@@ -86,12 +86,12 @@ class PayLoadConstructor {
         type = _type;
     }
 
-    uint32_t getTtl() { return ttl; };
+    uint32_t getHops() { return hops; };
     uint32_t getUid() { return uid; };
     int getType() { return type; };
     Ipv4Address getDestinationAddress() { return destinationAddress; };
 
-    void setTtl(uint32_t value) { ttl = value; };
+    void setHops(uint32_t value) { hops = value; };
     void setUid(uint32_t value) { uid = value; };
     void setType(int value) { type = value; };
     void setDestinationAddress(Ipv4Address value) { destinationAddress = value; };
@@ -99,7 +99,7 @@ class PayLoadConstructor {
     // Ipv4Address getDestinationAddressAsString(){ return destinationAddress; };
     void setDestinationAddressFromString(std::string value) { destinationAddress = ns3::Ipv4Address(value.c_str()); };
 
-    void decreaseTtl() { ttl -= 1; };
+    void incrementHops() { hops += 1; };
 
     void fromString(std::string stringPayload) {
         std::vector<std::string> values = splitString(stringPayload, delimiter);
@@ -107,7 +107,7 @@ class PayLoadConstructor {
             // 3;10.0.2.3;5;3 => TYPE;IP;TTL;UID
             type = std::stoi(values[0]);
             destinationAddress = ns3::Ipv4Address(values[1].c_str());
-            ttl = std::stoi(values[2]);
+            hops = std::stoi(values[2]);
             uid = std::stoi(values[3]);
         } else if (type == HELLO) {
             if (values[0] == "HELLO_ACK") type = HELLO_ACK;
@@ -124,7 +124,7 @@ class PayLoadConstructor {
 
     std::ostringstream toString() {
         std::ostringstream msg;
-        msg << destinationAddress << delimiter << ttl << delimiter << uid;
+        msg << destinationAddress << delimiter << hops << delimiter << uid;
         return msg;
     };
 
@@ -500,82 +500,79 @@ void ReceivePacket(Ptr<Socket> socket) {
             for (int buffIndex = 0; buffIndex < (int)bufferPackets.size(); buffIndex++) {
                 NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " ho un pacchetto da recapitare a " << bufferPackets[buffIndex].getDestinationAddress());
                 currentNode->printPredictability(socket->GetNode()->GetId());
-                if(bufferPackets[buffIndex].getTtl() == 0){
-                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " ho un pacchetto da recapitare a " << bufferPackets[buffIndex].getDestinationAddress() << " si ma il pacchetto ha TTL 0 , che facciamo?");
-                }
-                else{
-                    if (bufferPackets[buffIndex].getDestinationAddress() == ipSender) {
-                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Payload ricevuto " << stringPayload << " da: " << ipSender);
-                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " ehy mbare " << ipSender << " havi du uri ca ti cieccu, c'è posta per te.");
-                        bufferPackets[buffIndex].decreaseTtl();  // Decrease the TTL and build a new package content.
+             
+                if (bufferPackets[buffIndex].getDestinationAddress() == ipSender) {
+                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Payload ricevuto " << stringPayload << " da: " << ipSender);
+                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " ehy mbare " << ipSender << " havi du uri ca ti cieccu, c'è posta per te.");
+                    bufferPackets[buffIndex].incrementHops();  // Increment the Hops and build a new package content.
 
-                        bufferPackets[buffIndex].setType(PKTREQ);
-                        // toString create IP;TTL;UID -> toPacket append also the type of pkt
-                        std::ostringstream newcontent = bufferPackets[buffIndex].toString();
-                        Ptr<Packet> packet = bufferPackets[buffIndex].toPacketFromString(newcontent);
-                        InetSocketAddress remote = InetSocketAddress(ipSender, 80);
-                        socket->Connect(remote);
-                        socket->Send(packet);  // Send the packet request to the user.
+                    bufferPackets[buffIndex].setType(PKTREQ);
+                    // toString create IP;TTL;UID -> toPacket append also the type of pkt
+                    std::ostringstream newcontent = bufferPackets[buffIndex].toString();
+                    Ptr<Packet> packet = bufferPackets[buffIndex].toPacketFromString(newcontent);
+                    InetSocketAddress remote = InetSocketAddress(ipSender, 80);
+                    socket->Connect(remote);
+                    socket->Send(packet);  // Send the packet request to the user.
 
-                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with ttl: " << bufferPackets[buffIndex].getTtl() << " and uid: " << bufferPackets[buffIndex].getUid());
-                        break;
-                    } else {
-                        std::vector<std::string> currentNodePredictability = currentNode->getPredictabilityAsArray();
-                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Payload ricevuto " << stringPayload << " da: " << ipSender);
-                        for (int currentPredict = 0; currentPredict < (int)currentNodePredictability.size(); currentPredict++) {
-                            std::vector<std::string> currentValues = splitString(currentNodePredictability[currentPredict], ":");
-                            if (ns3::Ipv4Address(currentValues[0].c_str()) == bufferPackets[buffIndex].getDestinationAddress()) {
+                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with hops: " << bufferPackets[buffIndex].getHops() << " and uid: " << bufferPackets[buffIndex].getUid());
+                    break;
+                } else {
+                    std::vector<std::string> currentNodePredictability = currentNode->getPredictabilityAsArray();
+                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Payload ricevuto " << stringPayload << " da: " << ipSender);
+                    for (int currentPredict = 0; currentPredict < (int)currentNodePredictability.size(); currentPredict++) {
+                        std::vector<std::string> currentValues = splitString(currentNodePredictability[currentPredict], ":");
+                        if (ns3::Ipv4Address(currentValues[0].c_str()) == bufferPackets[buffIndex].getDestinationAddress()) {
 
-                                // Here we have the current predict for current payload (packet) and current node.
-                                // Going to search if the other nodes have a great predict
-                                std::vector<std::string> dataPayload = value; // Packet already open on top
+                            // Here we have the current predict for current payload (packet) and current node.
+                            // Going to search if the other nodes have a great predict
+                            std::vector<std::string> dataPayload = value; // Packet already open on top
 
-                                // Skip 1 because at index 1 we have the type payload, -1 because the string end with ;
-                                for (int tableIndex = 1; tableIndex < (int)dataPayload.size() - 1; tableIndex++) {
-                                    std::vector<std::string> tableValues = splitString(dataPayload[tableIndex], ":");
-                                    // tableValues from pkt payload , currentValue from by Table
-                                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Compare: " << currentValues[0].c_str() << " == " << tableValues[0].c_str() << " == " << bufferPackets[buffIndex].getDestinationAddress() << " | " << atof(currentValues[1].c_str()) << " < " << atof(tableValues[1].c_str()) << " for uid: " << bufferPackets[buffIndex].getUid());
-                                    if (
-                                        ns3::Ipv4Address(currentValues[0].c_str()) == ns3::Ipv4Address(tableValues[0].c_str()) &&
-                                        ns3::Ipv4Address(tableValues[0].c_str()) == bufferPackets[buffIndex].getDestinationAddress() &&
-                                        atof(currentValues[1].c_str()) < atof(tableValues[1].c_str())) {
-                                        bufferPackets[buffIndex].decreaseTtl();  // Decrease the TTL and build a new package content.
+                            // Skip 1 because at index 1 we have the type payload, -1 because the string end with ;
+                            for (int tableIndex = 1; tableIndex < (int)dataPayload.size() - 1; tableIndex++) {
+                                std::vector<std::string> tableValues = splitString(dataPayload[tableIndex], ":");
+                                // tableValues from pkt payload , currentValue from by Table
+                                NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Compare: " << currentValues[0].c_str() << " == " << tableValues[0].c_str() << " == " << bufferPackets[buffIndex].getDestinationAddress() << " | " << atof(currentValues[1].c_str()) << " < " << atof(tableValues[1].c_str()) << " for uid: " << bufferPackets[buffIndex].getUid());
+                                if (
+                                    ns3::Ipv4Address(currentValues[0].c_str()) == ns3::Ipv4Address(tableValues[0].c_str()) &&
+                                    ns3::Ipv4Address(tableValues[0].c_str()) == bufferPackets[buffIndex].getDestinationAddress() &&
+                                    atof(currentValues[1].c_str()) < atof(tableValues[1].c_str())) {
+                                    bufferPackets[buffIndex].incrementHops();  // Increment the Hops and build a new package content.
 
-                                        bufferPackets[buffIndex].setType(PKTREQ);
-                                        // toString create IP;TTL;UID -> toPacket append also the type of pkt
-                                        std::ostringstream newcontent = bufferPackets[buffIndex].toString();
-                                        Ptr<Packet> packet = bufferPackets[buffIndex].toPacketFromString(newcontent);
-                                        InetSocketAddress remote = InetSocketAddress(ipSender, 80);
-                                        socket->Connect(remote);
-                                        socket->Send(packet);  // Send the packet request to the user.
+                                    bufferPackets[buffIndex].setType(PKTREQ);
+                                    // toString create IP;TTL;UID -> toPacket append also the type of pkt
+                                    std::ostringstream newcontent = bufferPackets[buffIndex].toString();
+                                    Ptr<Packet> packet = bufferPackets[buffIndex].toPacketFromString(newcontent);
+                                    InetSocketAddress remote = InetSocketAddress(ipSender, 80);
+                                    socket->Connect(remote);
+                                    socket->Send(packet);  // Send the packet request to the user.
 
-                                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with ttl: " << bufferPackets[buffIndex].getTtl() << " and uid: " << bufferPackets[buffIndex].getUid());
-                                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Predict compare: " << atof(currentValues[1].c_str()) << " < " << atof(tableValues[1].c_str()) << " for uid: " << bufferPackets[buffIndex].getUid());
-                                        break;
-                                    }
+                                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with hops: " << bufferPackets[buffIndex].getHops() << " and uid: " << bufferPackets[buffIndex].getUid());
+                                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Predict compare: " << atof(currentValues[1].c_str()) << " < " << atof(tableValues[1].c_str()) << " for uid: " << bufferPackets[buffIndex].getUid());
+                                    break;
                                 }
                             }
                         }
                     }
                 }
+            
             }
         }
 
         int MAX_BUFFERSIZE = 5;  // it's temp
         if (payload.getType() == PKTREQ) {
             // std::vector<PayLoadConstructor> getPacketsBuffer()
-            NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Received PKREQ from: " << ipSender << " with ttl: " << payload.getTtl() << " and uid: " << payload.getUid());
+            NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Received PKREQ from: " << ipSender << " with Hops: " << payload.getHops() << " and uid: " << payload.getUid());
             NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Current buffer size: " << currentNode->getPacketsBuffer().size() << " / " << MAX_BUFFERSIZE);
             if ( ((int)currentNode->getPacketsBuffer().size() < MAX_BUFFERSIZE) || (payload.getDestinationAddress() == ipReceiver) ) {
                 if((payload.getDestinationAddress() != ipReceiver)){
                     payload.setType(STANDARD);  // Also done in savePacketsInBuffer
                     currentNode->savePacketsInBuffer(payload);
                 }else {
-                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " aohu mbare il pacchetto è pemméé - from: " << ipSender << " with ttl: " << payload.getTtl() << " and uid: " << payload.getUid());
+                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " aohu mbare il pacchetto è pemméé - from: " << ipSender << " with Hops: " << payload.getHops() << " and uid: " << payload.getUid());
                     if (dataForPackets[payload.getUid()].delivered != true){  // Prevent multiple logs for the same pkg receiver more times
                         dataForPackets[payload.getUid()].delivered = true;
                         dataForPackets[payload.getUid()].delivered_at = Simulator::Now().GetSeconds();
-                        dataForPackets[payload.getUid()].hops = payload.getTtl();
+                        dataForPackets[payload.getUid()].hops = payload.getHops();
                     }
                 }
                 payload.setType(PKTACK);
@@ -585,7 +582,7 @@ void ReceivePacket(Ptr<Socket> socket) {
                 socket->Connect(remote);
                 socket->Send(packet);  // Packet accepted
 
-                NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTACK to: " << ipSender << " with ttl: " << payload.getTtl() << " and uid: " << payload.getUid());
+                NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTACK to: " << ipSender << " with hops: " << payload.getHops() << " and uid: " << payload.getUid());
             }
         } else if (payload.getType() == PKTACK) {
             currentNode->increaseBytesSent((double)pkt->GetSize());
@@ -596,7 +593,7 @@ void ReceivePacket(Ptr<Socket> socket) {
                 if (bufferPackets[buffIndex].getUid() == payload.getUid()) {
                     currentNode->removePacketFromBufferByIndex(buffIndex);
 
-                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Received PKTACK from: " << ipSender << " with ttl: " << payload.getTtl() << " and uid: " << payload.getUid());
+                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Received PKTACK from: " << ipSender << " with Hops: " << payload.getHops() << " and uid: " << payload.getUid());
                     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Remove PKT with uid: " << payload.getUid() << " at index: " << buffIndex);
                     break;
                 }
@@ -605,15 +602,15 @@ void ReceivePacket(Ptr<Socket> socket) {
     }
 }
 
-static void GeneratePacket(int nodeId, Ipv4Address destinationAddress, uint32_t ttl, uint32_t uid) {
+static void GeneratePacket(int nodeId, Ipv4Address destinationAddress, uint32_t hops, uint32_t uid) {
     NodeHandler *currentNode = &nodeHandlerArray[nodeId];
 
     PayLoadConstructor payload = PayLoadConstructor(STANDARD);
-    payload.setTtl(ttl);
+    payload.setHops(hops);
     payload.setUid(uid);
     payload.setDestinationAddress(destinationAddress);
 
-    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << nodeId << " Create a new Packets for: " << destinationAddress << " with ttl: " << ttl << " and uid: " << uid);
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << nodeId << " Create a new Packets for: " << destinationAddress << " with hops: " << hops << " and uid: " << uid);
     if(dataForPackets[uid].start == 0) dataForPackets[uid].start = Simulator::Now().GetSeconds();
 
     currentNode->savePacketsInBuffer(payload);
@@ -623,16 +620,16 @@ int main(int argc, char *argv[]) {
     std::string phyMode("DsssRate1Mbps");
     // uint32_t gridWidth = 10;
     // double distance = 150;  // m
-    double simulationTime = 5000.00;
+    double simulationTime = 4000.00;
     uint32_t seed = 14;
     uint32_t sendAfter = 300;
 
     uint32_t numPackets = 1;
-    uint32_t numNodes = 100;  // by default, 50
-    uint32_t sinkNode = 81;
+    uint32_t numNodes = 60;  // by default, 50
+    uint32_t sinkNode = 1;
     uint32_t sourceNode = 7;
 
-    uint32_t TTL = 6;
+    uint32_t hops = 0;
     uint32_t UID = 0;
 
     double rss = -80;  // -dBm
@@ -644,7 +641,7 @@ int main(int argc, char *argv[]) {
     cmd.AddValue("numNodes", "number of nodes", numNodes);
     cmd.AddValue("sinkNode", "Receiver node number", sinkNode);
     cmd.AddValue("sourceNode", "Sender node number", sourceNode);
-    cmd.AddValue("ttl", "TTL For each packet", TTL);
+    cmd.AddValue("hops", "hops For each packet", hops);
     cmd.AddValue("seed", "Custom seed for simulation", seed);
     cmd.AddValue("simulationTime", "Set a custom time (s) for simulation", simulationTime);
     cmd.AddValue("sendAfter", "Send the first pkt after", sendAfter);
@@ -735,7 +732,7 @@ int main(int argc, char *argv[]) {
         PacketLogData dataPacket = {false, 0.00, 0.00, 0};
         dataForPackets.push_back(dataPacket);
         Simulator::Schedule(Seconds(sendAfter + (10 * i)), &GeneratePacket,
-                            c.Get(sourceNode)->GetId(), destinationAddress, TTL, UID);
+                            c.Get(sourceNode)->GetId(), destinationAddress, hops, UID);
 
         UID += 1;
     }
