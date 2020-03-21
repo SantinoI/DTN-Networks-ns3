@@ -1,5 +1,3 @@
-//TODO: try with different Time in RandomWalk2dMobilityModel like 60s or so
-//TODO: try to develop with 2 different receiver(hack sender) instead of 2 times received(hack)
 #include <stack>
 #include <vector>
 #include <algorithm>
@@ -39,7 +37,7 @@ typedef struct{
   double delivered_at;
 } PacketLogData;
 
-std::string debugLevel = "NORMAL"; //["NONE","NORMAL","MAX"]
+std::string debugLevel = "EXTRACTOR"; //["NONE","NORMAL","MAX","EXTRACTOR"]
 
 std::vector<PacketLogData> dataForPackets;
 
@@ -84,7 +82,6 @@ class PayLoadConstructor{
     void setUid(uint32_t value){ uid = value; };
     void setDestinationAddress(Ipv4Address value){ destinationAddress = value; };
 
-    // Ipv4Address getDestinationAddressAsString(){ return destinationAddress; };
     void setDestinationAddressFromString(std::string value){ destinationAddress = ns3::Ipv4Address(value.c_str()); };
 
     void decreaseTtl(){ ttl -= 1; };
@@ -130,8 +127,6 @@ class NodeHandler{
     int attempt;
     std::stack<uint64_t> packetsScheduled;
     std::stack<std::string> uidsPacketReceived;
-
-    // Next routing table values
 
   public:
     NodeHandler(){
@@ -223,8 +218,8 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UI
     (currentNode->searchInStack(UID) == true &&                  //stack of sent pkt
       (currentNode->countInReceived(previousAddressUid) < 2))    //stack of received pkt
     ){
-
-    if(debugLevel != "NONE"){NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ipSender <<"    " << socket->GetNode()->GetId() << "    Going to send packet with uid:    " << UID << "    and TTL:    " << ttl);}
+    if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT SENT, UID:    " << UID);}
+    if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ipSender <<"    " << socket->GetNode()->GetId() << "    Going to send packet with uid:    " << UID << "    and TTL:    " << ttl);}
 
     socket->Send (packet);
     if(previousAddressUid.compare(createStringAddressUid(ipSender, (int)UID, ";")) == 0)
@@ -236,8 +231,6 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<Packet> packet, uint32_t UI
 
     Simulator::Schedule (Seconds(60), &GenerateTraffic, socket, packet, UID, previousAddressUid, ttl);
   }
-
-  // socket->Close ();
 }
 
 
@@ -262,7 +255,7 @@ void ReceivePacket (Ptr<Socket> socket){
     PayLoadConstructor payload = PayLoadConstructor(EPIDEMIC);
     payload.fromPacket(pkt);
     payload.decreaseTtl();
-    // Only for clear code, nothing else for the moment
+
     uint32_t UID = payload.getUid();
     uint32_t TTL = payload.getTtl();
     Ipv4Address destinationAddress = payload.getDestinationAddress();
@@ -270,8 +263,8 @@ void ReceivePacket (Ptr<Socket> socket){
     std::string previousAddressUid = createStringAddressUid(destinationAddress, (int)UID, ";");
 
     if (currentNode->searchInReceived(previousAddressUid) == false) currentNode->pushInReceived(ipSender, UID);
-
-    if(debugLevel != "NONE"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ipReceiver << "    " << socket->GetNode()->GetId() << "    Received pkt size: " <<  pkt->GetSize () << " bytes with uid    " << UID << "    and TTL    " << TTL << "    from: " << ipSender << " to: " << destinationAddress);}
+    if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT RECEIVED, UID:    " << UID);}
+    if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ipReceiver << "    " << socket->GetNode()->GetId() << "    Received pkt size: " <<  pkt->GetSize () << " bytes with uid    " << UID << "    and TTL    " << TTL << "    from: " << ipSender << " to: " << destinationAddress);}
 
     if(ipReceiver != destinationAddress) {
       if(TTL != 0){
@@ -281,28 +274,26 @@ void ReceivePacket (Ptr<Socket> socket){
               socket->Connect (remote);
 
               Ptr<Packet> packet = payload.toPacket();
-              if(debugLevel != "NONE" and debugLevel != "NORMAL"){NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ipSender << "\tGoing to send packet with uid: " << UID << " and TTL " << TTL );}
+              if(debugLevel == "MAX"){NS_LOG_UNCOND (Simulator::Now().GetSeconds() << "s\t" << ipSender << "\tGoing to RE-send packet with uid: " << UID << " and TTL " << TTL );}
 
               Ptr<UniformRandomVariable> x = CreateObject<UniformRandomVariable> ();
               double randomPause = x->GetValue(0.1, 1.0);
-              // NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\tNodo numero: " << socket->GetNode()->GetId() << " attesa di " << randomPause );
               Simulator::Schedule (Seconds(randomPause), &GenerateTraffic,
                                   socket, packet, UID, previousAddressUid, TTL);
 
         } else {
-          if(debugLevel != "NONE" and debugLevel != "NORMAL"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ipReceiver << "\tI've already scheduled the message with uid: " << UID);}
-          // socket->Close ();
+          if(debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ipReceiver << "\tI've already scheduled the message with uid: " << UID);}
         }
-      } // else NS_LOG_UNCOND("TTL Scaduto");
+      }
     } else {
       if (dataForPackets[UID].delivered != true){  // Prevent multiple logs for the same pkg receiver more times
         dataForPackets[UID].delivered = true;
         dataForPackets[UID].delivered_at = Simulator::Now().GetSeconds();
-      if(debugLevel != "NONE"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<"s I am " << ipReceiver << " finally received the package with uid:    " << UID );}
+      if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT DESTINATION REACHED, UID:    " << UID);}
+      if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<"s I am " << ipReceiver << " finally received the package with uid:    " << UID );}
       } else {
-      if(debugLevel != "NONE" and debugLevel != "NORMAL"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<"s I am " << ipReceiver << " finally received the package with uid: " << UID );}
+      if(debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<"s I am " << ipReceiver << " finally received the package with uid: " << UID );}
       }
-      // socket->Close ();
     }
   }
 }
@@ -311,7 +302,7 @@ void ReceivePacket (Ptr<Socket> socket){
 int main (int argc, char *argv[]){
   std::string phyMode ("DsssRate1Mbps");
   //uint32_t gridWidth = 10;
-  // double distance = 150;  // m
+  // double distance = 150;
   
   uint32_t numPackets = 2;
   uint32_t numNodes = 80;  // by default, 50
@@ -361,22 +352,6 @@ int main (int argc, char *argv[]){
   wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel");
   wifiPhy.SetChannel (wifiChannel.Create ());
 
-  // FROM WIFI SIMPLE ADHHOC - SEEMS TO BE WITHOUT LOSS
-  /*
-  // This is one parameter that matters when using FixedRssLossModel
-  // set it to zero; otherwise, gain will be added
-  wifiPhy.Set ("RxGain", DoubleValue (0) );
-  // ns-3 supports RadioTap and Prism tracing extensions for 802.11b
-  wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
-
-  YansWifiChannelHelper wifiChannel;
-  wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-  // The below FixedRssLossModel will cause the rss to be fixed regardless
-  // of the distance between the two stations, and the transmit power
-  wifiChannel.AddPropagationLoss ("ns3::FixedRssLossModel","Rss",DoubleValue (rss));
-  wifiPhy.SetChannel (wifiChannel.Create ());
-  */
-
   // Add an upper mac and disable rate control
   WifiMacHelper wifiMac;
   wifi.SetStandard (WIFI_PHY_STANDARD_80211b);
@@ -388,27 +363,6 @@ int main (int argc, char *argv[]){
   NetDeviceContainer devices = wifi.Install (wifiPhy, wifiMac, c);
 
   MobilityHelper mobility;
-
-  /*
-   * WITHOUT GRID
-  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-  positionAlloc->Add (Vector (0.0, 0.0, 0.0));
-  positionAlloc->Add (Vector (5.0, 0.0, 0.0));
-  positionAlloc->Add (Vector (10.0, 0.0, 0.0));
-  positionAlloc->Add (Vector (15.0, 0.0, 0.0));
-  */
-
-  /*
-  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                 "MinX", DoubleValue (0.0),
-                                 "MinY", DoubleValue (0.0),
-                                 "DeltaX", DoubleValue (distance),
-                                 "DeltaY", DoubleValue (distance),
-                                 "GridWidth", UintegerValue (gridWidth),
-                                 "LayoutType", StringValue ("RowFirst"));
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.Install (c);
-  */
 
   mobility.SetPositionAllocator ("ns3::RandomDiscPositionAllocator",
                                 "X", StringValue ("5000.0"),
@@ -443,7 +397,6 @@ int main (int argc, char *argv[]){
   }
 
   Ptr<Socket> source = Socket::CreateSocket (c.Get (sourceNode), tid);
-  // InetSocketAddress remote = InetSocketAddress (i.GetAddress (sinkNode, 0), 80);
   InetSocketAddress remote = InetSocketAddress (Ipv4Address ("255.255.255.255"), 80);
   source->SetAllowBroadcast (true);
   source->Connect (remote);
@@ -472,18 +425,6 @@ int main (int argc, char *argv[]){
 
   AnimationInterface anim("adhoc-grid.xml");
 
-  /*
-    int x=0, y=0;
-    for(uint32_t i=0; i<numNodes; ++i){
-      if((i != 0) && (i % gridWidth == 0)) {
-        x = 0;
-        y += distance;
-      }
-      anim.SetConstantPosition(c.Get(i), x, y);
-      x = x+distance;
-  }
-  */
-
   anim.UpdateNodeDescription(c.Get(sourceNode),"Sender");
   anim.UpdateNodeDescription(c.Get(sinkNode),"Receiver");
 
@@ -496,11 +437,13 @@ int main (int argc, char *argv[]){
   for (int i = 0; i < (int)dataForPackets.size(); i++){
     if(dataForPackets[i].delivered == true) deliveredCounter++;
   }
-  NS_LOG_UNCOND("- Packets sent: \t" << (int)dataForPackets.size());
-  NS_LOG_UNCOND("- Packets delivered: \t" << deliveredCounter);
-  NS_LOG_UNCOND("- Delivery percentage: \t" << ((double)deliveredCounter / (double)dataForPackets.size()) * 100.00 << "%");
-  // Delivery time (?) (?) (?)
-
+  if(debugLevel != "NONE"){
+    NS_LOG_UNCOND("- Packets sent: \t" << (int)dataForPackets.size());
+    NS_LOG_UNCOND("- Packets delivered: \t" << deliveredCounter);
+    NS_LOG_UNCOND("- Delivery percentage: \t" << ((double)deliveredCounter / (double)dataForPackets.size()) * 100.00 << "%");
+    // Delivery time (?) (?) (?)
+  }
+  
   double totalBytesSent = 0.00;
   double totalBytesReceived = 0.00;
   int totalPacketsSent = 0;
@@ -514,11 +457,12 @@ int main (int argc, char *argv[]){
     totalAttempt += nodeHandlerArray[i].getAttempt();
   }
 
-  NS_LOG_UNCOND("- Total BytesSent: \t" << totalBytesSent);
-  NS_LOG_UNCOND("- Total BytesReceived: \t" << totalBytesReceived);
-  NS_LOG_UNCOND("- Total PacketsSent: \t" << totalPacketsSent);
-  NS_LOG_UNCOND("- Total PacketsReceived: \t" << totalPacketsReceived);
-  NS_LOG_UNCOND("- Total Attempt: \t" << totalAttempt);
-
+  if(debugLevel != "NONE"){
+    NS_LOG_UNCOND("- Total BytesSent: \t" << totalBytesSent);
+    NS_LOG_UNCOND("- Total BytesReceived: \t" << totalBytesReceived);
+    NS_LOG_UNCOND("- Total PacketsSent: \t" << totalPacketsSent);
+    NS_LOG_UNCOND("- Total PacketsReceived: \t" << totalPacketsReceived);
+    NS_LOG_UNCOND("- Total Attempt: \t" << totalAttempt);
+  }
   return 0;
 }
