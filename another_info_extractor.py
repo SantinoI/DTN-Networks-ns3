@@ -1,4 +1,4 @@
-#NB: put LOG_LEVEL TO "NORMAL"
+#NB: put LOG_LEVEL TO "EXTRACTOR"
 import copy
 
 i_packet = {
