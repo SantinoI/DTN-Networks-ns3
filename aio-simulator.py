@@ -135,7 +135,10 @@ if __name__ == "__main__":
             plt.ylabel(studycase_str)
             plt.suptitle(alghname.upper())
             logger.info("{} - {} - {} , {}".format(alghname, studycase_str, data_x, data_y))
-            plt_fname = "{}/{} - {}".format(output_folder, alghname, studycase_str)
-            plt.savefig('{}.png'.format(plt_fname))
-            # plt.savefig('{}.pdf'.format(plt_fname))
+            out_fname = "{}/{} - {}".format(output_folder, alghname, studycase_str)
+            with open("{}.xy.txt".format(out_fname), "w+") as f:
+                for index in range(0, len(data_x)):
+                    f.write("{}\t{}\n".format(data_x[index], data_y[index]))
+            plt.savefig('{}.png'.format(out_fname))
+            # plt.savefig('{}.pdf'.format(out_fname))
             plt.show()
