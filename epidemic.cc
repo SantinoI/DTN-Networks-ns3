@@ -22,7 +22,7 @@
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE ("WifiSimpleAdhocGrid");
+NS_LOG_COMPONENT_DEFINE ("DTN-EPIDEMIC");
 
 // Define enumeration for PayLoad type
 enum {
