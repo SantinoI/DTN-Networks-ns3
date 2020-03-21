@@ -4,54 +4,50 @@ import copy
 i_packet = {
 	"send_at": 0.0,
 	"uid": 0,
+	"ack":False,
 	"received": False,
 	"flying_pkt":0,
 	"until_now_pkt":0
 }
-#0s	10.1.0.45    44    Going to send packet with uid:    0    and TTL:    6
-#0.00110674s	10.1.0.80    79    Received pkt size: 14 bytes with uid    0    and TTL    5    from: 10.1.0.45 to: 10.1.0.46
-#0.818595s I am 10.1.0.46 finally received the package with uid:    0
+
+'''
+NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT SENT, UID:    " << UID)
+NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT ACK SENT, UID:    " << UID)
+NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT RECEIVED, UID:    " << UID)
+NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT DESTINATION REACHED, UID:    " << UID)
+'''
 pkt_list = []
 f = open('terminal.txt')
 line = f.readline()
 while line:
-	if "Going to send packet" in line:
-		send_at = (line.split("s"))[0]
-		line = line.split("    ")
-		uid = int(line[3])
-		
-		if len(pkt_list)-1 < uid:
+	if "PKT SENT, UID:" in line or "PKT ACK SENT, UID:" in line:
+		temp_pkt = copy.deepcopy(i_packet)
+
+		temp_pkt["send_at"] = double((line.split("s"))[0])
+		temp_pkt["uid"] = int((line.split("    "))[1])
+		temp_pkt["ack"] = "ACK" in line
+		if len(pkt_list)-1 < temp_pkt["uid"]:
 			pkt_list.append([])
 
-		temp_pkt = copy.deepcopy(i_packet)
+		if len(pkt_list[temp_pkt["uid"]])>0:
+			temp_pkt["until_now_pkt"] = pkt_list[temp_pkt["uid"]][-1]["until_now_pkt"]
 		
-		temp_pkt["uid"] = uid
-		temp_pkt["send_at"] = send_at
+		pkt_list[temp_pkt["uid"]].append(temp_pkt)
 
-		if len(pkt_list[uid])>0:
-			temp_pkt["until_now_pkt"] = pkt_list[uid][-1]["until_now_pkt"]
-		
-		pkt_list[uid].append(temp_pkt)
-
-	if "Received pkt size" in line:
-		
-		line = line.split("    ")
-		uid = int(line[3])
+	if "PKT RECEIVED, UID" in line:
+		uid = int((line.split("    "))[1])
 		
 		pkt_list[uid][-1]["until_now_pkt"] += 1
 		pkt_list[uid][-1]["flying_pkt"] += 1
 
-	if "finally received the package" in line:
-		send_at = (line.split("s"))[0]
-		line = line.split("    ")
-		uid = int(line[1])
+	if "PKT DESTINATION REACHED, UID:" in line:
+		uid = int((line.split("    ")[1]))
 
 		temp_pkt = copy.deepcopy(i_packet)
-		
+		temp_pkt["send_at"] = double((line.split("s"))[0])
 		temp_pkt["until_now_pkt"] = pkt_list[uid][-1]["until_now_pkt"] + 1
 		temp_pkt["flying_pkt"] = pkt_list[uid][-1]["flying_pkt"] + 1
 		temp_pkt["received"] = True
-		temp_pkt["send_at"] = send_at
 
 		pkt_list[uid].append(temp_pkt)
 
