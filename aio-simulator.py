@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-
+import copy
 import os
 import logging
 import datetime
@@ -35,6 +35,14 @@ FINAL_REPORT = [
     # "- Total PacketsReceived:",
 ]
 
+i_packet = {
+    "send_at": 0.0,
+    "uid": 0,
+    "ack":False,
+    "received": False,
+    "flying_pkt":0,
+    "until_now_pkt":0
+}
 
 def update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes):
     if alghname not in dataforplot:
@@ -45,6 +53,62 @@ def update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes)
         dataforplot[alghname][studycase] = []
     dataforplot[alghname][studycase].append({"x": float(nnodes.strip()), "y": float(value.replace("%", "").strip())})
     return dataforplot
+
+def another_info_extractor(lines, file_name):
+'''
+NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT SENT, UID:    " << UID)
+NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT ACK SENT, UID:    " << UID)
+NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT RECEIVED, UID:    " << UID)
+NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT DESTINATION REACHED, UID:    " << UID)
+'''
+    pkt_list = []
+    for line in lines:
+        if "PKT SENT, UID:" in line or "PKT ACK SENT, UID:" in line:
+            temp_pkt = copy.deepcopy(i_packet)
+
+            temp_pkt["send_at"] = double((line.split("s"))[0])
+            temp_pkt["uid"] = int((line.split("    "))[1])
+            temp_pkt["ack"] = "ACK" in line
+            if len(pkt_list)-1 < temp_pkt["uid"]:
+                pkt_list.append([])
+
+            if len(pkt_list[temp_pkt["uid"]])>0:
+                temp_pkt["until_now_pkt"] = pkt_list[temp_pkt["uid"]][-1]["until_now_pkt"]
+            
+            pkt_list[temp_pkt["uid"]].append(temp_pkt)
+
+        if "PKT RECEIVED, UID" in line:
+            uid = int((line.split("    "))[1])
+            
+            pkt_list[uid][-1]["until_now_pkt"] += 1
+            pkt_list[uid][-1]["flying_pkt"] += 1
+
+        if "PKT DESTINATION REACHED, UID:" in line:
+            uid = int((line.split("    ")[1]))
+
+            temp_pkt = copy.deepcopy(i_packet)
+            temp_pkt["send_at"] = double((line.split("s"))[0])
+            temp_pkt["until_now_pkt"] = pkt_list[uid][-1]["until_now_pkt"] + 1
+            temp_pkt["flying_pkt"] = pkt_list[uid][-1]["flying_pkt"] + 1
+            temp_pkt["received"] = True
+
+            pkt_list[uid].append(temp_pkt)
+
+    output_csv = open("{}.csv".format(file_name), "w")
+    output_csv.write("SEND_AT;UID;RECEIVED;FLYING_PACKET;PACKET_UNTIL_NOW\n")
+
+    for i in range(len(pkt_list)):
+        for j in range(len(pkt_list[i])):
+            output_csv.write("{};{};{};{};{}\n".format(
+                pkt_list[i][j]["send_at"],
+                pkt_list[i][j]["uid"],
+                pkt_list[i][j]["received"],
+                pkt_list[i][j]["flying_pkt"],
+                pkt_list[i][j]["until_now_pkt"]
+            ))
+
+    output_csv.close()
+
 
 
 def start_simulation(cmd, n, output):
@@ -102,6 +166,9 @@ if __name__ == "__main__":
         fname = fname.replace("\ ", " ").replace("\\", "")
         with open(fname, "r") as f:
             outlines = f.readlines()
+        
+        another_info_extractor(lines=outlines, file_name=fname)
+        
         outlines = outlines[-25:]  # ESAGERO
 
         cmd = fname.split("/")[-1]
