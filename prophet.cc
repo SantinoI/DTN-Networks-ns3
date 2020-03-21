@@ -548,6 +548,7 @@ void ReceivePacket(Ptr<Socket> socket) {
                 if((payload.getDestinationAddress() != ipReceiver)){
                     payload.setType(STANDARD);  // Also done in savePacketsInBuffer
                     currentNode->savePacketsInBuffer(payload);
+                    if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT RECEIVED, UID:    " << payload.getUid());}
                 }else {
                     if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT DESTINATION REACHED, UID:    " << payload.getUid());}
                     if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " aohu mbare il pacchetto è pemméé - from: " << ipSender << " with Hops: " << payload.getHops() << " and uid: " << payload.getUid());}
