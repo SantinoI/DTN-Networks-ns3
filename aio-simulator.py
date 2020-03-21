@@ -60,17 +60,18 @@ def start_simulation(cmd, n, output):
 
 
 if __name__ == "__main__":
-    default_args = "--sinkNode=14 --sourceNode=0 --seed=114 --simulationTime=1000 --sendAfter=250"
+    default_args = "--sinkNode=14 --sourceNode=0 --seed=112 --simulationTime=1000 --sendAfter=100"
     alghoritms_fname = ["prophet", "wifi-simple-adhoc-grid-anim"]
     num_packets = 3
     num_nodes_chunk = [15, 20, 30, 40, 50, 70, 90, 110, 130, 150, 200, 250, 500]
+    num_nodes_chunk.reverse()
     commands_list = []
     for alghname in alghoritms_fname:
         for nnodes in num_nodes_chunk:
             commands_list.append("scratch/{} --numNodes={} --numPackets={} {}".format(alghname, nnodes, num_packets, default_args))
 
     logger.info("Ready for start {} commands: {}".format(len(commands_list), "\n» " + "\n» ".join(commands_list)))
-    time.sleep(15)
+    time.sleep(5)
     outputs = []
 
     if not os.path.exists(CURRENT_PATH + "/aio-simulator"):
@@ -83,7 +84,7 @@ if __name__ == "__main__":
     multiprocess = []
     for index in range(0, len(commands_list)):
         fulloutput = output_folder + "/{}.out.txt".format(
-            commands_list[index].replace("scratch/", "").replace(default_args, "").replace(" ", "\ ").strip()
+            commands_list[index].replace("scratch/", "").replace(default_args, "").strip().replace(" ", "\ ").strip()
         )
         outputs.append(fulloutput)
         multiprocess.append(multiprocessing.Process(target=start_simulation, args=(commands_list[index], index + 1, fulloutput)))
