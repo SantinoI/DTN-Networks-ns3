@@ -1,5 +1,3 @@
-//TODO: try with different Time in RandomWalk2dMobilityModel like 60s or so
-//TODO: try to develop with 2 different receiver(hack sender) instead of 2 times received(hack)
 #include <algorithm>
 #include <stack>
 #include <vector>
@@ -45,11 +43,13 @@ typedef struct {
     int hops;
 } PacketLogData;
 
-// Struttura di incontri
+// Meetings struct
 typedef struct {
     Ipv4Address ip;
     float time_meet;
 } Meet;
+
+std::string debugLevel = "EXTRACTOR"; //["NONE","NORMAL","MAX", "EXTRACTOR"]
 
 std::vector<PacketLogData> dataForPackets;
 
@@ -96,7 +96,6 @@ class PayLoadConstructor {
     void setType(int value) { type = value; };
     void setDestinationAddress(Ipv4Address value) { destinationAddress = value; };
 
-    // Ipv4Address getDestinationAddressAsString(){ return destinationAddress; };
     void setDestinationAddressFromString(std::string value) { destinationAddress = ns3::Ipv4Address(value.c_str()); };
 
     void incrementHops() { hops += 1; };
@@ -135,10 +134,8 @@ class PayLoadConstructor {
         return packet;
     }
     Ptr<Packet> toPacketFromString(std::ostringstream &tmp) {
-        // NS_LOG_UNCOND("toPacketFromString ha ricevuto " << tmp.str());
         std::ostringstream msg;
         msg << getType() << ";" << tmp.str();
-        // NS_LOG_UNCOND("toPacketFromString sta impacchettando  IL MESSAGGIO " << msg.str());
         uint32_t packetSize = msg.str().length() + 1;
         Ptr<Packet> packet = Create<Packet>((uint8_t *)msg.str().c_str(), packetSize);
         return packet;
@@ -164,7 +161,7 @@ class NodeHandler {
     std::stack<uint64_t> packetsScheduled;
     std::stack<std::string> uidsPacketReceived;
     std::vector<Meet> meeting;
-    // Vettore delle predizioni. es A:23.8;B:96
+    // Predictions array e.g. A:23.8;B:96
     std::vector<std::string> predictability;
     std::vector<PayLoadConstructor> bufferPackets;
 
@@ -228,20 +225,21 @@ class NodeHandler {
         for (int i = 0; i < (int)predictability.size(); i++) {
             msg << predictability[i] << ";";
         }
-        //NS_LOG_UNCOND("predictability del nodo è " << msg.str());
         return msg;
     }
     std::vector<std::string> getPredictabilityAsArray() { return predictability; };
     void printPredictability(int nodeid) {
-        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\tPredictability of node: " << nodeid);
-        NS_LOG_UNCOND("_________________________________");
-        NS_LOG_UNCOND("| ADDRESS \t || PREDICT \t|");
-        NS_LOG_UNCOND("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
-        for (int i = 0; i < (int)predictability.size(); i++) {
-            std::vector<std::string> singlePredict = splitString(predictability[i], ":");
-            NS_LOG_UNCOND("| " << singlePredict[0] << " \t || " << singlePredict[1]);
+        if(debugLevel == "MAX"){
+            NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\tPredictability of node: " << nodeid);
+            NS_LOG_UNCOND("_________________________________");
+            NS_LOG_UNCOND("| ADDRESS \t || PREDICT \t|");
+            NS_LOG_UNCOND("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
+            for (int i = 0; i < (int)predictability.size(); i++) {
+                std::vector<std::string> singlePredict = splitString(predictability[i], ":");
+                NS_LOG_UNCOND("| " << singlePredict[0] << " \t || " << singlePredict[1]);
+            }
+            NS_LOG_UNCOND("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
         }
-        NS_LOG_UNCOND("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
     }
 
     void updatePredictability(Ptr<Packet> packet, Ipv4Address ip, Ipv4Address currentIp) {
@@ -251,21 +249,15 @@ class NodeHandler {
         std::vector<std::string> payloadData = splitString(stringPayload, ";");
         int type = atoi(payloadData[0].c_str());
 
-        // if (nodeid == 7 || nodeid == 81) NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << nodeid << " | " << currentIp << " Payload ricevuto " << stringPayload << " da: " << ip);
-
         if (type == HELLO) {
             bool exist = false;
             for (int i = 0; i < (int)predictability.size(); i++) {
                 std::vector<std::string> oldValue = splitString(predictability[i], ":");
                 if (ns3::Ipv4Address(oldValue[0].c_str()) == ip) {
                     exist = true;
-                    //NS_LOG_UNCOND("Ho trovato un riscontro, sto aggiornando " << oldValue[0]);
                     float newValue = atof(oldValue[1].c_str()) + (1 - atof(oldValue[1].c_str())) * 0.75;
-                    //NS_LOG_UNCOND("Il nuovo valore è " << newValue);
-                    //predictability.erase(predictability.begin()+i);
                     std::ostringstream newEntry;
                     newEntry << ip << ":" << newValue;
-                    //predictability.push_back(newEntry.str());
                     predictability.at(i) = newEntry.str();
                     break;
                 }
@@ -277,7 +269,7 @@ class NodeHandler {
                 predictability.push_back(newEntry.str());
             }
         } else if (type == HELLO_ACK) {
-            // Aggiorno il tempo trascorso dall'ultimo invecchiamento
+            // updating time since the last aging
             float deltaAging = getLasMeeting(Simulator::Now().GetSeconds(), ip);
             bool exist = false;
 
@@ -285,14 +277,9 @@ class NodeHandler {
                 std::vector<std::string> oldValue = splitString(predictability[i], ":");
 
                 if (ns3::Ipv4Address(oldValue[0].c_str()) != ip) {
-                    //if(ns3::Ipv4Address(oldValue[0].c_str()) == ip && i == (int)predictability.size()) break;
                     float newValue = atof(oldValue[1].c_str()) * (pow(0.98, deltaAging));
-                    //NS_LOG_UNCOND("INVECCHIAMENTO: il vecchio valore è " << oldValue[1].c_str() << " Il nuovo è " << newValue);
-                    //predictability.erase(predictability.begin()+i);
                     std::ostringstream newEntry;
                     newEntry << oldValue[0] << ":" << newValue;
-                    // NS_LOG_UNCOND("New entry: " << newEntry.str());
-                    //predictability.insert(predictability.begin()+i,newEntry.str());
                     predictability[i] = newEntry.str();
                 }else exist = true;
             }
@@ -302,16 +289,12 @@ class NodeHandler {
                 predictability.push_back(newEntry.str());
             }
         }
-        // Itera l'array predictability del nodo corrente. Dentro si itera PayloadData,
-        // Predict[i] e payloadData[i] -- > split con :
-        // M = Nodo corrente , E = ip (nodo incontrato), D = tutti gli altri
         if (type == HELLO_ACK2 || type == HELLO_ACK) {
             float newValue;
 
-            for (int x = 0; x < (int)predictability.size(); x++) {  // serve per prendere P(M,E)
+            for (int x = 0; x < (int)predictability.size(); x++) {  // in order to calc P(M,E)
                 std::vector<std::string> currentValue = splitString(predictability[x], ":");
                 if (ns3::Ipv4Address(currentValue[0].c_str()) == ip) {
-                    //value found, save and break
                     newValue = atof(currentValue[1].c_str());
                     break;
                 }
@@ -323,15 +306,13 @@ class NodeHandler {
                 std::vector<std::string> recValue = splitString(payloadData[j], ":");
                 for (int i = 0; i < lenPredictability; i++) {
                     std::vector<std::string> oldValue = splitString(predictability[i], ":");
-                    if (currentIp != ns3::Ipv4Address(recValue[0].c_str())){ //attuo tutto il procedimento solo se l'ip che sto controllando non è il mio
-                        // NS_LOG_UNCOND("oldValue " << oldValue[0].c_str() << " recValue " << recValue[0].c_str());
+                    if (currentIp != ns3::Ipv4Address(recValue[0].c_str())){ //do it only if the IP I'm checking is not mine
                         if (ns3::Ipv4Address(oldValue[0].c_str()) == ns3::Ipv4Address(recValue[0].c_str())) {
-                            float transValue = atof(oldValue[1].c_str()) + (1 - atof(oldValue[1].c_str())) * newValue * atof(recValue[1].c_str()) * 0.25;  // i dont know how much is Beta
+                            float transValue = atof(oldValue[1].c_str()) + (1 - atof(oldValue[1].c_str())) * newValue * atof(recValue[1].c_str()) * 0.25;
 
-                            if (transValue > atof(oldValue[1].c_str())) {  //non so se questo controllo si deve fare onestamente, ad intuito direi di si (me lo prendo solo se migliore di quello che ho già)
+                            if (transValue > atof(oldValue[1].c_str())) {  //only take it if it's better than I already have
                                 std::ostringstream newEntry;
                                 newEntry << oldValue[0] << ":" << transValue;
-                                // NS_LOG_UNCOND("1) New entry: " << newEntry.str());
                                 predictability[i] = newEntry.str();
                             }
                             break;
@@ -341,14 +322,11 @@ class NodeHandler {
 
                             float transValue = newValue * atof(recValue[1].c_str()) * 0.25;
                             newEntry << recValue[0] << ":" << transValue;
-                            // NS_LOG_UNCOND("2) New entry: " << newEntry.str());
                             predictability.push_back(newEntry.str());
                         } 
                     }
                 }
             }
-            // NS_LOG_UNCOND("FINE AGGIORNAMENTO DOPO TRANSITIVA");
-            // printPredictability(nodeid);
         }
     }
 
@@ -415,11 +393,8 @@ class NodeHandler {
 std::vector<NodeHandler> nodeHandlerArray;
 
 static void GenerateHello(Ptr<Socket> socket) {
-    // Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
-    // Ipv4InterfaceAddress iaddr = ipv4->GetAddress(1, 0);
-    // Ipv4Address ipSender = iaddr.GetLocal();
 
-     NodeHandler *currentNode = &nodeHandlerArray[socket->GetNode()->GetId()];
+    NodeHandler *currentNode = &nodeHandlerArray[socket->GetNode()->GetId()];
 
     InetSocketAddress broadcast = InetSocketAddress(Ipv4Address("255.255.255.255"), 80);
     socket->SetAllowBroadcast(true);
@@ -429,8 +404,6 @@ static void GenerateHello(Ptr<Socket> socket) {
     msg << HELLO;
     uint32_t packetSize = msg.str().length() + 1;
     Ptr<Packet> packet = Create<Packet>((uint8_t *)msg.str().c_str(), packetSize);
-
-    // NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ipSender << "\t Manda messaggio di HELLO: ");
 
     socket->Send(packet);
     
@@ -448,16 +421,12 @@ void ReceivePacket(Ptr<Socket> socket) {
     while (pkt = socket->RecvFrom(from)) {
         NodeHandler *currentNode = &nodeHandlerArray[socket->GetNode()->GetId()];
 
-        //currentNode->increaseBytesReceived((double)pkt->GetSize()); DA INSERIRE NEI VARI CASI (HELLO/NON HELLO) una volta fatta la struttura di invio msg
-        //currentNode->increasePacketsReceived(1);
-
         ipSender = InetSocketAddress::ConvertFrom(from).GetIpv4();
 
         Ptr<Ipv4> ipv4 = socket->GetNode()->GetObject<Ipv4>();
         Ipv4InterfaceAddress iaddr = ipv4->GetAddress(1, 0);
         Ipv4Address ipReceiver = iaddr.GetLocal();
 
-        // Apro il pacchetto
         uint8_t *buffer = new uint8_t[pkt->GetSize()];
         pkt->CopyData(buffer, pkt->GetSize());
         std::string stringPayload = std::string((char *)buffer);
@@ -472,17 +441,14 @@ void ReceivePacket(Ptr<Socket> socket) {
             currentNode->updatePredictability(pkt, ipSender, ipReceiver);
             std::ostringstream predictability = currentNode->getPredictability();
             payload.setType(HELLO_ACK);
-            // NS_LOG_UNCOND("Io sono -> " << ipReceiver << " Ho ricevuto un HELLO da " << ipSender << " sto mandando alla funzione toPacketFromString: -> " << predictability.str());
             Ptr<Packet> packet = payload.toPacketFromString(predictability);
             InetSocketAddress remote = InetSocketAddress(ipSender, 80);
             socket->Connect(remote);
-            // NS_LOG_UNCOND("Io sono-> " << ipReceiver << " sto inviando l'ACK a " << ipSender << "Con la mia tabella uguale a: " << predictability.str());
             socket->Send(packet);
             currentNode->increaseHelloBytesSent((double)packet->GetSize())
             currentNode->increaseHelloPacketsSent(1)
 
         } else if (payload.getType() == HELLO_ACK) {
-            // NS_LOG_UNCOND("Sono " << ipReceiver << " HO RICEVUTO ACK");
             currentNode->updatePredictability(pkt, ipSender, ipReceiver);
 
             std::ostringstream predictability = currentNode->getPredictability();
@@ -495,10 +461,7 @@ void ReceivePacket(Ptr<Socket> socket) {
 
             currentNode->increaseHelloBytesSent((double)packet->GetSize())
             currentNode->increaseHelloPacketsSent(1)
-            /*
-            currentNode->pushInMeeting(ipSender, Simulator::Now().GetSeconds());
-            currentNode->printMeeting(socket->GetNode()->GetId());
-            */
+
         } else if(payload.getType() == HELLO_ACK2){
             currentNode->updatePredictability(pkt, ipSender, ipReceiver);
         }
@@ -507,12 +470,14 @@ void ReceivePacket(Ptr<Socket> socket) {
         if (originalPayloadType == HELLO_ACK || originalPayloadType == HELLO_ACK2) {
             std::vector<PayLoadConstructor> bufferPackets = currentNode->getPacketsBuffer();
             for (int buffIndex = 0; buffIndex < (int)bufferPackets.size(); buffIndex++) {
-                NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " ho un pacchetto da recapitare a " << bufferPackets[buffIndex].getDestinationAddress());
+                if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " ho un pacchetto da recapitare a " << bufferPackets[buffIndex].getDestinationAddress());}
                 currentNode->printPredictability(socket->GetNode()->GetId());
              
                 if (bufferPackets[buffIndex].getDestinationAddress() == ipSender) {
-                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Payload ricevuto " << stringPayload << " da: " << ipSender);
-                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " ehy mbare " << ipSender << " havi du uri ca ti cieccu, c'è posta per te.");
+                    if(debugLevel == "NORMAL" or debugLevel == "MAX"){
+                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Payload ricevuto " << stringPayload << " da: " << ipSender);
+                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " ehy mbare " << ipSender << " havi du uri ca ti cieccu, c'è posta per te.");
+                    }
                     bufferPackets[buffIndex].incrementHops();  // Increment the Hops and build a new package content.
 
                     bufferPackets[buffIndex].setType(PKTREQ);
@@ -524,24 +489,24 @@ void ReceivePacket(Ptr<Socket> socket) {
                     socket->Send(packet);  // Send the packet request to the user.
                     currentNode->increaseBytesSent((double)packet->GetSize())
                     currentNode->increasePacketsSent(1)
-                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with hops: " << bufferPackets[buffIndex].getHops() << " and uid: " << bufferPackets[buffIndex].getUid());
+                    if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with hops: " << bufferPackets[buffIndex].getHops() << " and uid: " << bufferPackets[buffIndex].getUid());}
                     break;
                 } else {
                     std::vector<std::string> currentNodePredictability = currentNode->getPredictabilityAsArray();
-                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Payload ricevuto " << stringPayload << " da: " << ipSender);
+                    if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Payload ricevuto " << stringPayload << " da: " << ipSender);}
                     for (int currentPredict = 0; currentPredict < (int)currentNodePredictability.size(); currentPredict++) {
                         std::vector<std::string> currentValues = splitString(currentNodePredictability[currentPredict], ":");
                         if (ns3::Ipv4Address(currentValues[0].c_str()) == bufferPackets[buffIndex].getDestinationAddress()) {
 
                             // Here we have the current predict for current payload (packet) and current node.
-                            // Going to search if the other nodes have a great predict
+                            // Going to search if the other nodes have a greater predict
                             std::vector<std::string> dataPayload = value; // Packet already open on top
 
                             // Skip 1 because at index 1 we have the type payload, -1 because the string end with ;
                             for (int tableIndex = 1; tableIndex < (int)dataPayload.size() - 1; tableIndex++) {
                                 std::vector<std::string> tableValues = splitString(dataPayload[tableIndex], ":");
                                 // tableValues from pkt payload , currentValue from by Table
-                                NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Compare: " << currentValues[0].c_str() << " == " << tableValues[0].c_str() << " == " << bufferPackets[buffIndex].getDestinationAddress() << " | " << atof(currentValues[1].c_str()) << " < " << atof(tableValues[1].c_str()) << " for uid: " << bufferPackets[buffIndex].getUid());
+                                if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Compare: " << currentValues[0].c_str() << " == " << tableValues[0].c_str() << " == " << bufferPackets[buffIndex].getDestinationAddress() << " | " << atof(currentValues[1].c_str()) << " < " << atof(tableValues[1].c_str()) << " for uid: " << bufferPackets[buffIndex].getUid());}
                                 if (
                                     ns3::Ipv4Address(currentValues[0].c_str()) == ns3::Ipv4Address(tableValues[0].c_str()) &&
                                     ns3::Ipv4Address(tableValues[0].c_str()) == bufferPackets[buffIndex].getDestinationAddress() &&
@@ -557,8 +522,10 @@ void ReceivePacket(Ptr<Socket> socket) {
                                     socket->Send(packet);  // Send the packet request to the user.
                                     currentNode->increaseBytesSent((double)packet->GetSize())
                                     currentNode->increasePacketsSent(1)
-                                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with hops: " << bufferPackets[buffIndex].getHops() << " and uid: " << bufferPackets[buffIndex].getUid());
-                                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Predict compare: " << atof(currentValues[1].c_str()) << " < " << atof(tableValues[1].c_str()) << " for uid: " << bufferPackets[buffIndex].getUid());
+                                    if(debugLevel == "NORMAL" or debugLevel == "MAX"){
+                                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with hops: " << bufferPackets[buffIndex].getHops() << " and uid: " << bufferPackets[buffIndex].getUid());
+                                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Predict compare: " << atof(currentValues[1].c_str()) << " < " << atof(tableValues[1].c_str()) << " for uid: " << bufferPackets[buffIndex].getUid());
+                                    }
                                     break;
                                 }
                             }
@@ -571,15 +538,16 @@ void ReceivePacket(Ptr<Socket> socket) {
 
         int MAX_BUFFERSIZE = 5;  // it's temp
         if (payload.getType() == PKTREQ) {
-            // std::vector<PayLoadConstructor> getPacketsBuffer()
-            NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Received PKREQ from: " << ipSender << " with Hops: " << payload.getHops() << " and uid: " << payload.getUid());
-            NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Current buffer size: " << currentNode->getPacketsBuffer().size() << " / " << MAX_BUFFERSIZE);
+            if(debugLevel == "NORMAL" or debugLevel == "MAX"){
+                NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Received PKREQ from: " << ipSender << " with Hops: " << payload.getHops() << " and uid: " << payload.getUid());
+                NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Current buffer size: " << currentNode->getPacketsBuffer().size() << " / " << MAX_BUFFERSIZE);
+            }
             if ( ((int)currentNode->getPacketsBuffer().size() < MAX_BUFFERSIZE) || (payload.getDestinationAddress() == ipReceiver) ) {
                 if((payload.getDestinationAddress() != ipReceiver)){
                     payload.setType(STANDARD);  // Also done in savePacketsInBuffer
                     currentNode->savePacketsInBuffer(payload);
                 }else {
-                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " aohu mbare il pacchetto è pemméé - from: " << ipSender << " with Hops: " << payload.getHops() << " and uid: " << payload.getUid());
+                    if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " aohu mbare il pacchetto è pemméé - from: " << ipSender << " with Hops: " << payload.getHops() << " and uid: " << payload.getUid());}
                     if (dataForPackets[payload.getUid()].delivered != true){  // Prevent multiple logs for the same pkg receiver more times
                         dataForPackets[payload.getUid()].delivered = true;
                         dataForPackets[payload.getUid()].delivered_at = Simulator::Now().GetSeconds();
@@ -594,7 +562,7 @@ void ReceivePacket(Ptr<Socket> socket) {
                 socket->Send(packet);  // Packet accepted
                 currentNode->increaseBytesSent((double)packet->GetSize())
                 currentNode->increasePacketsSent(1)
-                NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTACK to: " << ipSender << " with hops: " << payload.getHops() << " and uid: " << payload.getUid());
+                if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTACK to: " << ipSender << " with hops: " << payload.getHops() << " and uid: " << payload.getUid());}
             }
         } else if (payload.getType() == PKTACK) {
             currentNode->increaseBytesSent((double)pkt->GetSize());
@@ -604,9 +572,10 @@ void ReceivePacket(Ptr<Socket> socket) {
             for (int buffIndex = 0; buffIndex < (int)bufferPackets.size(); buffIndex++) {
                 if (bufferPackets[buffIndex].getUid() == payload.getUid()) {
                     currentNode->removePacketFromBufferByIndex(buffIndex);
-
-                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Received PKTACK from: " << ipSender << " with Hops: " << payload.getHops() << " and uid: " << payload.getUid());
-                    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Remove PKT with uid: " << payload.getUid() << " at index: " << buffIndex);
+                    if(debugLevel == "NORMAL" or debugLevel == "MAX"){
+                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Received PKTACK from: " << ipSender << " with Hops: " << payload.getHops() << " and uid: " << payload.getUid());
+                        NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Remove PKT with uid: " << payload.getUid() << " at index: " << buffIndex);
+                    }
                     break;
                 }
             }
@@ -629,7 +598,7 @@ static void GeneratePacket(int nodeId, Ipv4Address destinationAddress, uint32_t 
     payload.setUid(uid);
     payload.setDestinationAddress(destinationAddress);
 
-    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << nodeId << " Create a new Packets for: " << destinationAddress << " with hops: " << hops << " and uid: " << uid);
+    if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << nodeId << " Create a new Packets for: " << destinationAddress << " with hops: " << hops << " and uid: " << uid);}
     if(dataForPackets[uid].start == 0) dataForPackets[uid].start = Simulator::Now().GetSeconds();
 
     currentNode->savePacketsInBuffer(payload);
@@ -638,7 +607,7 @@ static void GeneratePacket(int nodeId, Ipv4Address destinationAddress, uint32_t 
 int main(int argc, char *argv[]) {
     std::string phyMode("DsssRate1Mbps");
     // uint32_t gridWidth = 10;
-    // double distance = 150;  // m
+    // double distance = 150; 
     double simulationTime = 4000.00;
     uint32_t seed = 14;
     uint32_t sendAfter = 300;
@@ -728,7 +697,6 @@ int main(int argc, char *argv[]) {
 
     TypeId tid = TypeId::LookupByName("ns3::UdpSocketFactory");
     InetSocketAddress local = InetSocketAddress(Ipv4Address::GetAny(), 80);
-    // InetSocketAddress broadcast = InetSocketAddress(Ipv4Address("255.255.255.255"), 80);
 
     Ptr<Socket> recvSinkArray[numNodes];
     for (uint32_t i = 0; i < numNodes; ++i) {
@@ -736,9 +704,6 @@ int main(int argc, char *argv[]) {
         recvSinkArray[i] = Socket::CreateSocket(c.Get(i), tid);
         recvSinkArray[i]->Bind(local);
         recvSinkArray[i]->SetRecvCallback(MakeCallback(&ReceivePacket));
-
-        // recvSinkArray[i]->SetAllowBroadcast(true);
-        // recvSinkArray[i]->Connect(broadcast);
 
         Simulator::Schedule(Seconds(1 * i), &GenerateHello,
                             recvSinkArray[i]);
@@ -771,14 +736,16 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < (int)dataForPackets.size(); i++) {
         if (dataForPackets[i].delivered == true) {
             deliveredCounter++;
-            NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << (double)(dataForPackets[i].delivered_at - dataForPackets[i].start));
+            if(debugLevel != "NONE"){NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << (double)(dataForPackets[i].delivered_at - dataForPackets[i].start));}
         }
-        else NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << 0);
+        else if(debugLevel != "NONE"){NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << 0);}
     }
-    NS_LOG_UNCOND("- Packets sent: \t" << (int)dataForPackets.size());
-    NS_LOG_UNCOND("- Packets delivered: \t" << deliveredCounter);
-    NS_LOG_UNCOND("- Delivery percentage: \t" << ((double)deliveredCounter / (double)dataForPackets.size()) * 100.00 << "%");
-    // Delivery time (?) (?) (?)
+    if(debugLevel != "NONE"){
+        NS_LOG_UNCOND("- Packets sent: \t" << (int)dataForPackets.size());
+        NS_LOG_UNCOND("- Packets delivered: \t" << deliveredCounter);
+        NS_LOG_UNCOND("- Delivery percentage: \t" << ((double)deliveredCounter / (double)dataForPackets.size()) * 100.00 << "%");
+        // Delivery time (?) (?) (?)
+    }
 
     double totalBytesSent = 0.00;
     double totalBytesReceived = 0.00;
@@ -793,11 +760,14 @@ int main(int argc, char *argv[]) {
         totalAttempt += nodeHandlerArray[i].getAttempt();
     }
 
-    NS_LOG_UNCOND("- Total BytesSent: \t" << totalBytesSent);
-    NS_LOG_UNCOND("- Total BytesReceived: \t" << totalBytesReceived);
-    NS_LOG_UNCOND("- Total PacketsSent: \t" << totalPacketsSent);
-    NS_LOG_UNCOND("- Total PacketsReceived: \t" << totalPacketsReceived);
-    NS_LOG_UNCOND("- Total Attempt: \t" << totalAttempt);
+    if(debugLevel != "NONE"){
+        NS_LOG_UNCOND("- Total BytesSent: \t" << totalBytesSent);
+        NS_LOG_UNCOND("- Total BytesReceived: \t" << totalBytesReceived);
+        NS_LOG_UNCOND("- Total PacketsSent: \t" << totalPacketsSent);
+        NS_LOG_UNCOND("- Total PacketsReceived: \t" << totalPacketsReceived);
+        NS_LOG_UNCOND("- Total Attempt: \t" << totalAttempt);
+    }
+    
 
     return 0;
 }
