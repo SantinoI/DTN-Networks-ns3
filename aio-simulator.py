@@ -60,7 +60,7 @@ def start_simulation(cmd, n, output):
 
 
 if __name__ == "__main__":
-    default_args = "--sinkNode=14 --sourceNode=0 --seed=112 --simulationTime=1000 --sendAfter=100"
+    default_args = "--sinkNode=14 --sourceNode=0 --seed=112 --simulationTime=5000 --sendAfter=100"
     alghoritms_fname = ["prophet", "wifi-simple-adhoc-grid-anim"]
     num_packets = 3
     num_nodes_chunk = [15, 20, 30, 40, 50, 70, 90, 110, 130, 150, 200, 250, 500]
@@ -93,6 +93,9 @@ if __name__ == "__main__":
         if len(multiprocess) == max_process:
             multiprocess[0].join()
             multiprocess.pop(0)
+
+    for index in range(0, len(multiprocess)):
+        multiprocess[index].join()
 
     dataforplot = {}
     for fname in outputs:
@@ -138,7 +141,7 @@ if __name__ == "__main__":
             out_fname = "{}/{} - {}".format(output_folder, alghname, studycase_str)
             with open("{}.xy.txt".format(out_fname), "w+") as f:
                 for index in range(0, len(data_x)):
-                    f.write("{}\t{}\n".format(data_x[index], data_y[index]))
+                    f.write("{}\t{}".format(data_x[index], data_y[index]) + ("\n" if index != len(data_x)-1 else ""))
             plt.savefig('{}.png'.format(out_fname))
             # plt.savefig('{}.pdf'.format(out_fname))
             plt.show()
