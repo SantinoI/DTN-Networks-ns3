@@ -22,7 +22,7 @@
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE("WifiSimpleAdhocGrid");
+NS_LOG_COMPONENT_DEFINE("DTN-PROPHET");
 
 // Define enumeration for PayLoad type
 enum {
@@ -489,6 +489,7 @@ void ReceivePacket(Ptr<Socket> socket) {
                     socket->Send(packet);  // Send the packet request to the user.
                     currentNode->increaseBytesSent((double)packet->GetSize())
                     currentNode->increasePacketsSent(1)
+                    if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT SENT, UID:    " << bufferPackets[buffIndex].getUid());}
                     if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with hops: " << bufferPackets[buffIndex].getHops() << " and uid: " << bufferPackets[buffIndex].getUid());}
                     break;
                 } else {
@@ -522,6 +523,7 @@ void ReceivePacket(Ptr<Socket> socket) {
                                     socket->Send(packet);  // Send the packet request to the user.
                                     currentNode->increaseBytesSent((double)packet->GetSize())
                                     currentNode->increasePacketsSent(1)
+                                    if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT SENT, UID:    " << bufferPackets[buffIndex].getUid());}
                                     if(debugLevel == "NORMAL" or debugLevel == "MAX"){
                                         NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with hops: " << bufferPackets[buffIndex].getHops() << " and uid: " << bufferPackets[buffIndex].getUid());
                                         NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Predict compare: " << atof(currentValues[1].c_str()) << " < " << atof(tableValues[1].c_str()) << " for uid: " << bufferPackets[buffIndex].getUid());
@@ -547,6 +549,7 @@ void ReceivePacket(Ptr<Socket> socket) {
                     payload.setType(STANDARD);  // Also done in savePacketsInBuffer
                     currentNode->savePacketsInBuffer(payload);
                 }else {
+                    if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT DESTINATION REACHED, UID:    " << payload.getUid());}
                     if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " aohu mbare il pacchetto è pemméé - from: " << ipSender << " with Hops: " << payload.getHops() << " and uid: " << payload.getUid());}
                     if (dataForPackets[payload.getUid()].delivered != true){  // Prevent multiple logs for the same pkg receiver more times
                         dataForPackets[payload.getUid()].delivered = true;
@@ -562,16 +565,16 @@ void ReceivePacket(Ptr<Socket> socket) {
                 socket->Send(packet);  // Packet accepted
                 currentNode->increaseBytesSent((double)packet->GetSize())
                 currentNode->increasePacketsSent(1)
+                if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT ACK SENT, UID:    " << payload.getUid());}
                 if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTACK to: " << ipSender << " with hops: " << payload.getHops() << " and uid: " << payload.getUid());}
             }
         } else if (payload.getType() == PKTACK) {
-            currentNode->increaseBytesSent((double)pkt->GetSize());
-            currentNode->increasePacketsSent(1);
             // Remove from buffer array the uid accepted from ack
             std::vector<PayLoadConstructor> bufferPackets = currentNode->getPacketsBuffer();
             for (int buffIndex = 0; buffIndex < (int)bufferPackets.size(); buffIndex++) {
                 if (bufferPackets[buffIndex].getUid() == payload.getUid()) {
                     currentNode->removePacketFromBufferByIndex(buffIndex);
+                    if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT RECEIVED, UID:    " << payload.getUid());}
                     if(debugLevel == "NORMAL" or debugLevel == "MAX"){
                         NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Received PKTACK from: " << ipSender << " with Hops: " << payload.getHops() << " and uid: " << payload.getUid());
                         NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Remove PKT with uid: " << payload.getUid() << " at index: " << buffIndex);
