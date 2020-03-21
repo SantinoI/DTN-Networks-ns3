@@ -419,7 +419,7 @@ static void GenerateHello(Ptr<Socket> socket) {
     // Ipv4InterfaceAddress iaddr = ipv4->GetAddress(1, 0);
     // Ipv4Address ipSender = iaddr.GetLocal();
 
-    // NodeHandler *currentNode = &nodeHandlerArray[socket->GetNode()->GetId()];
+     NodeHandler *currentNode = &nodeHandlerArray[socket->GetNode()->GetId()];
 
     InetSocketAddress broadcast = InetSocketAddress(Ipv4Address("255.255.255.255"), 80);
     socket->SetAllowBroadcast(true);
@@ -433,6 +433,9 @@ static void GenerateHello(Ptr<Socket> socket) {
     // NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << ipSender << "\t Manda messaggio di HELLO: ");
 
     socket->Send(packet);
+    
+    currentNode->increaseHelloBytesSent(packetSize)
+    currentNode->increaseHelloPacketsSent(1)
 
     Simulator::Schedule(Seconds(60), &GenerateHello, socket);
 }
@@ -475,6 +478,9 @@ void ReceivePacket(Ptr<Socket> socket) {
             socket->Connect(remote);
             // NS_LOG_UNCOND("Io sono-> " << ipReceiver << " sto inviando l'ACK a " << ipSender << "Con la mia tabella uguale a: " << predictability.str());
             socket->Send(packet);
+            currentNode->increaseHelloBytesSent((double)packet->GetSize())
+            currentNode->increaseHelloPacketsSent(1)
+
         } else if (payload.getType() == HELLO_ACK) {
             // NS_LOG_UNCOND("Sono " << ipReceiver << " HO RICEVUTO ACK");
             currentNode->updatePredictability(pkt, ipSender, ipReceiver);
@@ -486,6 +492,9 @@ void ReceivePacket(Ptr<Socket> socket) {
             InetSocketAddress remote = InetSocketAddress(ipSender, 80);
             socket->Connect(remote);
             socket->Send(packet);
+
+            currentNode->increaseHelloBytesSent((double)packet->GetSize())
+            currentNode->increaseHelloPacketsSent(1)
             /*
             currentNode->pushInMeeting(ipSender, Simulator::Now().GetSeconds());
             currentNode->printMeeting(socket->GetNode()->GetId());
@@ -513,7 +522,8 @@ void ReceivePacket(Ptr<Socket> socket) {
                     InetSocketAddress remote = InetSocketAddress(ipSender, 80);
                     socket->Connect(remote);
                     socket->Send(packet);  // Send the packet request to the user.
-
+                    currentNode->increaseBytesSent((double)packet->GetSize())
+                    currentNode->increasePacketsSent(1)
                     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with hops: " << bufferPackets[buffIndex].getHops() << " and uid: " << bufferPackets[buffIndex].getUid());
                     break;
                 } else {
@@ -545,7 +555,8 @@ void ReceivePacket(Ptr<Socket> socket) {
                                     InetSocketAddress remote = InetSocketAddress(ipSender, 80);
                                     socket->Connect(remote);
                                     socket->Send(packet);  // Send the packet request to the user.
-
+                                    currentNode->increaseBytesSent((double)packet->GetSize())
+                                    currentNode->increasePacketsSent(1)
                                     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with hops: " << bufferPackets[buffIndex].getHops() << " and uid: " << bufferPackets[buffIndex].getUid());
                                     NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Predict compare: " << atof(currentValues[1].c_str()) << " < " << atof(tableValues[1].c_str()) << " for uid: " << bufferPackets[buffIndex].getUid());
                                     break;
@@ -581,7 +592,8 @@ void ReceivePacket(Ptr<Socket> socket) {
                 InetSocketAddress remote = InetSocketAddress(ipSender, 80);
                 socket->Connect(remote);
                 socket->Send(packet);  // Packet accepted
-
+                currentNode->increaseBytesSent((double)packet->GetSize())
+                currentNode->increasePacketsSent(1)
                 NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTACK to: " << ipSender << " with hops: " << payload.getHops() << " and uid: " << payload.getUid());
             }
         } else if (payload.getType() == PKTACK) {
@@ -598,6 +610,13 @@ void ReceivePacket(Ptr<Socket> socket) {
                     break;
                 }
             }
+        }
+        if(payload.getType() == PKTACK or payload.getType() == PKTREQ){
+            currentNode->increaseBytesReceived((double)pkt->GetSize())
+            currentNode->increasePacketsReceived(1)
+        } else {
+            currentNode->increaseHelloBytesReceived((double)pkt->GetSize())
+            currentNode->increaseHelloPacketsReceived(1)
         }
     }
 }
