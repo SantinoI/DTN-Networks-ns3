@@ -19,3 +19,22 @@
 - si può fare qualcosa facendo variare il seed (ora settato a 167)
 
 - si può fare qualcosa facendo variare RXGain/TXGain
+
+____________________ALTRI_APPUNTI_______________________
+
+- Tempi di esecuzione uguali per tutti (direi abbastanza grandi)
+- Mappa uguali per tutti
+- Source and receiver = per tutti
+
+- Numero di nodi variabile per n pacchetti
+
+- Gestire i TTL / Gestire/farne stats per gli HOP
+
+Grafici fattibili
+- Pacchetti deliverati %
+- Bytes/pacchetti inviati/ricevuti (cosa ce ne facciamo) (?)
+
+————————————————
+
+- Pacchetti deliverati con numero di nodi variabili e n pacchetti fisso (5 ?)
+- Tempo di consegna per n pacchetti = 1 e nodi variabili
