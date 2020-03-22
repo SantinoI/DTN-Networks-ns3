@@ -685,8 +685,8 @@ int main(int argc, char *argv[]) {
                                   "Rho", StringValue("ns3::UniformRandomVariable[Min=1000.0|Max=5000.0]"));
     mobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
                               "Mode", StringValue("Time"),
-                              "Time", StringValue("15s"),
-                              "Speed", StringValue("ns3::ConstantRandomVariable[Constant=10.0]"),  // 36 km/h
+                              "Time", StringValue("45s"),
+                              "Speed", StringValue("ns3::ConstantRandomVariable[Constant=5.0]"),  // 18 km/h
                               "Bounds", StringValue("0|10000|0|10000"));
 
     mobility.InstallAll();
