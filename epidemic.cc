@@ -415,11 +415,9 @@ int main (int argc, char *argv[]){
 
   Ipv4InterfaceAddress iaddrSender = c.Get(sourceNode)->GetObject<Ipv4>()->GetAddress (1,0);
   Ipv4Address ipSender = iaddrSender.GetLocal ();
-  uint32_t tempTTL;
   for (uint32_t i=0; i<numPackets; i++){
     PayLoadConstructor payload = PayLoadConstructor(EPIDEMIC);
-    tempTTL = TTL + (i*2);
-    payload.setTtl(tempTTL);
+    payload.setTtl(TTL);
     payload.setUid(UID);
     payload.setDestinationAddress(ipReceiver);
     Ptr<Packet> packet = payload.toPacket();
@@ -428,7 +426,7 @@ int main (int argc, char *argv[]){
     dataForPackets.push_back(dataPacket);
 
     Simulator::Schedule(Seconds(sendAfter * i), &GenerateTraffic,
-                        source, packet, UID, createStringAddressUid(ipSender, (int)UID, ";"), tempTTL);
+                        source, packet, UID, createStringAddressUid(ipSender, (int)UID, ";"), TTL);
     UID += 1;
   }
 
@@ -467,13 +465,11 @@ int main (int argc, char *argv[]){
   double totalBytesReceived = 0.00;
   int totalPacketsSent = 0;
   int totalPacketsReceived = 0;
-  int totalAttempt = 0;
   for (uint32_t i = 0; i < numNodes; ++i){
     totalBytesSent += nodeHandlerArray[i].getBytesSent();
     totalBytesReceived += nodeHandlerArray[i].getBytesReceived();
     totalPacketsSent += nodeHandlerArray[i].getPacketsSent();
     totalPacketsReceived += nodeHandlerArray[i].getPacketsReceived();
-    totalAttempt += nodeHandlerArray[i].getAttempt();
   }
 
   if(debugLevel != "NONE"){
@@ -486,7 +482,6 @@ int main (int argc, char *argv[]){
     NS_LOG_UNCOND("- Total BytesHelloReceived: \t" << 0);
     NS_LOG_UNCOND("- Total PacketsHelloSent: \t" << 0);
     NS_LOG_UNCOND("- Total PacketsHelloReceived: \t" << 0);
-    // NS_LOG_UNCOND("- Total Attempt: \t" << totalAttempt);
   }
   return 0;
 }
