@@ -127,7 +127,7 @@ if __name__ == "__main__":
     default_args = "--sinkNode=14 --sourceNode=0 --seed=112 --simulationTime=5000 --sendAfter=100"
     alghoritms_fname = ["prophet", "epidemic"]
     num_packets = 3
-    num_nodes_chunk = [15, 20, 30, 40, 50, 70, 90, 110] # , 130, 150, 200, 250, 500]
+    num_nodes_chunk = [15, 20, 30, 40, 50, 70, 90, 110, 130, 150, 200, 250, 500]
     num_nodes_chunk.reverse()
     commands_list = []
     for alghname in alghoritms_fname:
@@ -207,7 +207,7 @@ if __name__ == "__main__":
             plt.ylabel(studycase_str)
             plt.suptitle(alghname.upper())
             logger.info("{} - {} - {} , {}".format(alghname, studycase_str, data_x, data_y))
-            out_fname = "{}/{} - {}".format(output_folder, alghname, studycase_str)
+            out_fname = "{}/{} - {}".format(output_folder, alghname, studycase_str.replace("/", "-"))
             with open("{}.xy.csv".format(out_fname), "w+") as f:
                 f.write("{};{}\n".format(xlabel, studycase_str))
                 for index in range(0, len(data_x)):
