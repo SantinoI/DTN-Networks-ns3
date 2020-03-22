@@ -716,7 +716,7 @@ int main(int argc, char *argv[]) {
     for (uint32_t i = 0; i < numPackets; i++) {
         PacketLogData dataPacket = {false, 0.00, 0.00, 0};
         dataForPackets.push_back(dataPacket);
-        Simulator::Schedule(Seconds(sendAfter + (10 * i)), &GeneratePacket,
+        Simulator::Schedule(Seconds(sendAfter * ( i+1 ) ), &GeneratePacket,
                             c.Get(sourceNode)->GetId(), destinationAddress, hops, UID);
 
         UID += 1;

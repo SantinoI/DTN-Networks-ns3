@@ -124,11 +124,11 @@ def start_simulation(cmd, n, output):
 
 
 if __name__ == "__main__":
-    default_args = "--sinkNode=14 --sourceNode=0 --seed=112 --simulationTime=5000 --sendAfter=100"
+    default_args = "--sinkNode=1 --sourceNode=0 --seed=112 --simulationTime=21600 --sendAfter=100"
     alghoritms_fname = ["prophet", "epidemic"]
-    num_packets = 3
-    num_nodes_chunk = [15, 20, 30, 40, 50, 70, 90, 110, 130, 150, 200, 250, 500]
-    num_nodes_chunk.reverse()
+    num_packets = 200
+    num_nodes_chunk = [15, 25, 35, 50, 75, 100, 150, 200, 300]
+    # num_nodes_chunk.reverse()
     commands_list = []
     for alghname in alghoritms_fname:
         for nnodes in num_nodes_chunk:

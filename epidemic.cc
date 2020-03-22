@@ -425,7 +425,7 @@ int main (int argc, char *argv[]){
     PacketLogData dataPacket = {false, 0.00, 0.00, 0};
     dataForPackets.push_back(dataPacket);
 
-    Simulator::Schedule(Seconds(sendAfter * i), &GenerateTraffic,
+    Simulator::Schedule(Seconds(sendAfter * ( i+1 ) ), &GenerateTraffic,
                         source, packet, UID, createStringAddressUid(ipSender, (int)UID, ";"), TTL);
     UID += 1;
   }
