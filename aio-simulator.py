@@ -26,23 +26,21 @@ NS3PATH = "/home/alessandro/Documents/ns-allinone-3.30.1/ns-3.30.1/"
 CURRENT_PATH = os.path.abspath(os.getcwd())
 
 FINAL_REPORT = [
-    # "- Packets sent:",
+    "- Packets sent:",
     "- Packets delivered:",
     "- Delivery percentage:",
-    # "- Total BytesSent:",
-    # "- Total BytesReceived:",
-    # "- Total PacketsSent:",
-    # "- Total PacketsReceived:",
+    "- Total BytesSent:",
+    "- Total BytesReceived:",
+    "- Total PacketsSent:",
+    "- Total PacketsReceived:",
+    "- Total BytesHelloSent:",
+    "- Total BytesHelloReceived:",
+    "- Total PacketsHelloSent:",
+    "- Total PacketsHelloReceived:",
 ]
 
-i_packet = {
-    "send_at": 0.0,
-    "uid": 0,
-    "ack":False,
-    "received": False,
-    "flying_pkt":0,
-    "until_now_pkt":0
-}
+i_packet = {"send_at": 0.0, "uid": 0, "ack": False, "received": False, "flying_pkt": 0, "until_now_pkt": 0}
+
 
 def update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes):
     if alghname not in dataforplot:
@@ -54,32 +52,33 @@ def update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes)
     dataforplot[alghname][studycase].append({"x": float(nnodes.strip()), "y": float(value.replace("%", "").strip())})
     return dataforplot
 
+
 def another_info_extractor(lines, file_name):
-'''
-NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT SENT, UID:    " << UID)
-NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT ACK SENT, UID:    " << UID)
-NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT RECEIVED, UID:    " << UID)
-NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT DESTINATION REACHED, UID:    " << UID)
-'''
+    """
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT SENT, UID:    " << UID)
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT ACK SENT, UID:    " << UID)
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT RECEIVED, UID:    " << UID)
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT DESTINATION REACHED, UID:    " << UID)
+    """
     pkt_list = []
     for line in lines:
         if "PKT SENT, UID:" in line or "PKT ACK SENT, UID:" in line:
             temp_pkt = copy.deepcopy(i_packet)
 
-            temp_pkt["send_at"] = double((line.split("s"))[0])
+            temp_pkt["send_at"] = float((line.split("s"))[0])
             temp_pkt["uid"] = int((line.split("    "))[1])
             temp_pkt["ack"] = "ACK" in line
-            if len(pkt_list)-1 < temp_pkt["uid"]:
+            if len(pkt_list) - 1 < temp_pkt["uid"]:
                 pkt_list.append([])
 
-            if len(pkt_list[temp_pkt["uid"]])>0:
+            if len(pkt_list[temp_pkt["uid"]]) > 0:
                 temp_pkt["until_now_pkt"] = pkt_list[temp_pkt["uid"]][-1]["until_now_pkt"]
-            
+
             pkt_list[temp_pkt["uid"]].append(temp_pkt)
 
         if "PKT RECEIVED, UID" in line:
             uid = int((line.split("    "))[1])
-            
+
             pkt_list[uid][-1]["until_now_pkt"] += 1
             pkt_list[uid][-1]["flying_pkt"] += 1
 
@@ -87,7 +86,7 @@ NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT DESTINATION REACHED, UID
             uid = int((line.split("    ")[1]))
 
             temp_pkt = copy.deepcopy(i_packet)
-            temp_pkt["send_at"] = double((line.split("s"))[0])
+            temp_pkt["send_at"] = float((line.split("s"))[0])
             temp_pkt["until_now_pkt"] = pkt_list[uid][-1]["until_now_pkt"] + 1
             temp_pkt["flying_pkt"] = pkt_list[uid][-1]["flying_pkt"] + 1
             temp_pkt["received"] = True
@@ -99,16 +98,17 @@ NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT DESTINATION REACHED, UID
 
     for i in range(len(pkt_list)):
         for j in range(len(pkt_list[i])):
-            output_csv.write("{};{};{};{};{}\n".format(
-                pkt_list[i][j]["send_at"],
-                pkt_list[i][j]["uid"],
-                pkt_list[i][j]["received"],
-                pkt_list[i][j]["flying_pkt"],
-                pkt_list[i][j]["until_now_pkt"]
-            ))
+            output_csv.write(
+                "{};{};{};{};{}\n".format(
+                    pkt_list[i][j]["send_at"],
+                    pkt_list[i][j]["uid"],
+                    pkt_list[i][j]["received"],
+                    pkt_list[i][j]["flying_pkt"],
+                    pkt_list[i][j]["until_now_pkt"],
+                )
+            )
 
     output_csv.close()
-
 
 
 def start_simulation(cmd, n, output):
@@ -125,7 +125,7 @@ def start_simulation(cmd, n, output):
 
 if __name__ == "__main__":
     default_args = "--sinkNode=14 --sourceNode=0 --seed=112 --simulationTime=5000 --sendAfter=100"
-    alghoritms_fname = ["prophet", "wifi-simple-adhoc-grid-anim"]
+    alghoritms_fname = ["prophet", "epidemic"]
     num_packets = 3
     num_nodes_chunk = [15, 20, 30, 40, 50, 70, 90, 110, 130, 150, 200, 250, 500]
     num_nodes_chunk.reverse()
@@ -166,9 +166,9 @@ if __name__ == "__main__":
         fname = fname.replace("\ ", " ").replace("\\", "")
         with open(fname, "r") as f:
             outlines = f.readlines()
-        
+
         another_info_extractor(lines=outlines, file_name=fname)
-        
+
         outlines = outlines[-25:]  # ESAGERO
 
         cmd = fname.split("/")[-1]
@@ -185,30 +185,33 @@ if __name__ == "__main__":
                     dataforplot = update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes)
                     break
 
-        npkts = args[1].replace("--numPackets=", "")
-        for npkt in range(1, len(npkts)+1):
-            founded = False
-            for single_line in outlines:
-                match_string = "- Packets {} delta delivery:".format(npkt)
-                if single_line.startswith(match_string):
-                    dataforplot = update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes)
-                    founded = True
-                    break
+        for packet_string in ["- Packets {} delta delivery:", "- Packets {} TTL/HOPS:"]:
+            npkts = args[1].replace("--numPackets=", "")
+            for npkt in range(1, len(npkts) + 1):
+                founded = False
+                for single_line in outlines:
+                    match_string = packet_string.format(npkt)
+                    if single_line.startswith(match_string):
+                        dataforplot = update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes)
+                        founded = True
+                        break
 
     for alghname in dataforplot:
         for studycase in dataforplot[alghname]:
             data_x = [item["x"] for item in dataforplot[alghname][studycase]]
             data_y = [item["y"] for item in dataforplot[alghname][studycase]]
             plt.plot(data_x, data_y)
-            plt.xlabel("Node number".upper())
-            studycase_str = studycase.upper().replace('-', '').replace(':', '')
+            xlabel = "Node number".upper()
+            plt.xlabel(xlabel)
+            studycase_str = studycase.upper().replace("-", "").replace(":", "")
             plt.ylabel(studycase_str)
             plt.suptitle(alghname.upper())
             logger.info("{} - {} - {} , {}".format(alghname, studycase_str, data_x, data_y))
-            out_fname = "{}/{} - {}".format(output_folder, alghname, studycase_str)
-            with open("{}.xy.txt".format(out_fname), "w+") as f:
+            out_fname = "{}/{} - {}".format(output_folder, alghname, studycase_str.replace("/", "-"))
+            with open("{}.xy.csv".format(out_fname), "w+") as f:
+                f.write("{};{}\n".format(xlabel, studycase_str))
                 for index in range(0, len(data_x)):
-                    f.write("{}\t{}".format(data_x[index], data_y[index]) + ("\n" if index != len(data_x)-1 else ""))
-            plt.savefig('{}.png'.format(out_fname))
+                    f.write("{};{}".format(data_x[index], data_y[index]) + ("\n" if index != len(data_x) - 1 else ""))
+            plt.savefig("{}.png".format(out_fname))
             # plt.savefig('{}.pdf'.format(out_fname))
             plt.show()

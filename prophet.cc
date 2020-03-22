@@ -156,7 +156,6 @@ class NodeHandler {
     double helloBytesReceived;
     int helloPacketsReceived;
 
-    int attempt;
     float lastAging;
     std::stack<uint64_t> packetsScheduled;
     std::stack<std::string> uidsPacketReceived;
@@ -172,7 +171,6 @@ class NodeHandler {
         packetsSent = 0;
         bytesReceived = 0.0;
         packetsReceived = 0;
-        attempt = 0;
 
         helloBytesSent = 0.0;
         helloPacketsSent = 0;
@@ -203,9 +201,6 @@ class NodeHandler {
     void increaseHelloPacketsSent(double value) { helloPacketsSent += value; }
     void increaseHelloBytesReceived(double value) { helloBytesReceived += value; }
     void increaseHelloPacketsReceived(double value) { helloPacketsReceived += value; }
-
-    void incrementAttempt() { attempt++; }
-    int getAttempt() { return attempt; }
 
     float getLasMeeting(float now, Ipv4Address ip) {
         for (int i = 0; i < (int)meeting.size(); i++) {
@@ -323,7 +318,7 @@ class NodeHandler {
                             float transValue = newValue * atof(recValue[1].c_str()) * 0.25;
                             newEntry << recValue[0] << ":" << transValue;
                             predictability.push_back(newEntry.str());
-                        } 
+                        }
                     }
                 }
             }
@@ -406,9 +401,9 @@ static void GenerateHello(Ptr<Socket> socket) {
     Ptr<Packet> packet = Create<Packet>((uint8_t *)msg.str().c_str(), packetSize);
 
     socket->Send(packet);
-    
-    currentNode->increaseHelloBytesSent(packetSize)
-    currentNode->increaseHelloPacketsSent(1)
+
+    currentNode->increaseHelloBytesSent(packetSize);
+    currentNode->increaseHelloPacketsSent(1);
 
     Simulator::Schedule(Seconds(60), &GenerateHello, socket);
 }
@@ -445,8 +440,8 @@ void ReceivePacket(Ptr<Socket> socket) {
             InetSocketAddress remote = InetSocketAddress(ipSender, 80);
             socket->Connect(remote);
             socket->Send(packet);
-            currentNode->increaseHelloBytesSent((double)packet->GetSize())
-            currentNode->increaseHelloPacketsSent(1)
+            currentNode->increaseHelloBytesSent((double)packet->GetSize());
+            currentNode->increaseHelloPacketsSent(1);
 
         } else if (payload.getType() == HELLO_ACK) {
             currentNode->updatePredictability(pkt, ipSender, ipReceiver);
@@ -459,8 +454,8 @@ void ReceivePacket(Ptr<Socket> socket) {
             socket->Connect(remote);
             socket->Send(packet);
 
-            currentNode->increaseHelloBytesSent((double)packet->GetSize())
-            currentNode->increaseHelloPacketsSent(1)
+            currentNode->increaseHelloBytesSent((double)packet->GetSize());
+            currentNode->increaseHelloPacketsSent(1);
 
         } else if(payload.getType() == HELLO_ACK2){
             currentNode->updatePredictability(pkt, ipSender, ipReceiver);
@@ -472,7 +467,7 @@ void ReceivePacket(Ptr<Socket> socket) {
             for (int buffIndex = 0; buffIndex < (int)bufferPackets.size(); buffIndex++) {
                 if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " ho un pacchetto da recapitare a " << bufferPackets[buffIndex].getDestinationAddress());}
                 currentNode->printPredictability(socket->GetNode()->GetId());
-             
+
                 if (bufferPackets[buffIndex].getDestinationAddress() == ipSender) {
                     if(debugLevel == "NORMAL" or debugLevel == "MAX"){
                         NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Payload ricevuto " << stringPayload << " da: " << ipSender);
@@ -487,8 +482,8 @@ void ReceivePacket(Ptr<Socket> socket) {
                     InetSocketAddress remote = InetSocketAddress(ipSender, 80);
                     socket->Connect(remote);
                     socket->Send(packet);  // Send the packet request to the user.
-                    currentNode->increaseBytesSent((double)packet->GetSize())
-                    currentNode->increasePacketsSent(1)
+                    currentNode->increaseBytesSent((double)packet->GetSize());
+                    currentNode->increasePacketsSent(1);
                     if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT SENT, UID:    " << bufferPackets[buffIndex].getUid());}
                     if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with hops: " << bufferPackets[buffIndex].getHops() << " and uid: " << bufferPackets[buffIndex].getUid());}
                     break;
@@ -521,8 +516,8 @@ void ReceivePacket(Ptr<Socket> socket) {
                                     InetSocketAddress remote = InetSocketAddress(ipSender, 80);
                                     socket->Connect(remote);
                                     socket->Send(packet);  // Send the packet request to the user.
-                                    currentNode->increaseBytesSent((double)packet->GetSize())
-                                    currentNode->increasePacketsSent(1)
+                                    currentNode->increaseBytesSent((double)packet->GetSize());
+                                    currentNode->increasePacketsSent(1);
                                     if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT SENT, UID:    " << bufferPackets[buffIndex].getUid());}
                                     if(debugLevel == "NORMAL" or debugLevel == "MAX"){
                                         NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTREQ to: " << ipSender << " with hops: " << bufferPackets[buffIndex].getHops() << " and uid: " << bufferPackets[buffIndex].getUid());
@@ -534,7 +529,7 @@ void ReceivePacket(Ptr<Socket> socket) {
                         }
                     }
                 }
-            
+
             }
         }
 
@@ -564,8 +559,8 @@ void ReceivePacket(Ptr<Socket> socket) {
                 InetSocketAddress remote = InetSocketAddress(ipSender, 80);
                 socket->Connect(remote);
                 socket->Send(packet);  // Packet accepted
-                currentNode->increaseBytesSent((double)packet->GetSize())
-                currentNode->increasePacketsSent(1)
+                currentNode->increaseBytesSent((double)packet->GetSize());
+                currentNode->increasePacketsSent(1);
                 if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT ACK SENT, UID:    " << payload.getUid());}
                 if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t" << socket->GetNode()->GetId() << " Sent PKTACK to: " << ipSender << " with hops: " << payload.getHops() << " and uid: " << payload.getUid());}
             }
@@ -585,11 +580,11 @@ void ReceivePacket(Ptr<Socket> socket) {
             }
         }
         if(payload.getType() == PKTACK or payload.getType() == PKTREQ){
-            currentNode->increaseBytesReceived((double)pkt->GetSize())
-            currentNode->increasePacketsReceived(1)
+            currentNode->increaseBytesReceived((double)pkt->GetSize());
+            currentNode->increasePacketsReceived(1);
         } else {
-            currentNode->increaseHelloBytesReceived((double)pkt->GetSize())
-            currentNode->increaseHelloPacketsReceived(1)
+            currentNode->increaseHelloBytesReceived((double)pkt->GetSize());
+            currentNode->increaseHelloPacketsReceived(1);
         }
     }
 }
@@ -611,7 +606,7 @@ static void GeneratePacket(int nodeId, Ipv4Address destinationAddress, uint32_t 
 int main(int argc, char *argv[]) {
     std::string phyMode("DsssRate1Mbps");
     // uint32_t gridWidth = 10;
-    // double distance = 150; 
+    // double distance = 150;
     double simulationTime = 4000.00;
     uint32_t seed = 14;
     uint32_t sendAfter = 300;
@@ -622,6 +617,7 @@ int main(int argc, char *argv[]) {
     uint32_t sourceNode = 7;
 
     uint32_t hops = 0;
+    uint32_t TTL = 0;
     uint32_t UID = 0;
 
     double rss = -80;  // -dBm
@@ -634,6 +630,7 @@ int main(int argc, char *argv[]) {
     cmd.AddValue("sinkNode", "Receiver node number", sinkNode);
     cmd.AddValue("sourceNode", "Sender node number", sourceNode);
     cmd.AddValue("hops", "hops For each packet", hops);
+    cmd.AddValue("ttl", "ttl - Just for aio-simulator", TTL);
     cmd.AddValue("seed", "Custom seed for simulation", seed);
     cmd.AddValue("simulationTime", "Set a custom time (s) for simulation", simulationTime);
     cmd.AddValue("sendAfter", "Send the first pkt after", sendAfter);
@@ -740,9 +737,15 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < (int)dataForPackets.size(); i++) {
         if (dataForPackets[i].delivered == true) {
             deliveredCounter++;
-            if(debugLevel != "NONE"){NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << (double)(dataForPackets[i].delivered_at - dataForPackets[i].start));}
+            if(debugLevel != "NONE"){
+                NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << (double)(dataForPackets[i].delivered_at - dataForPackets[i].start));
+                NS_LOG_UNCOND("- Packets " << i + 1 << " TTL/HOPS: \t" << dataForPackets[i].hops);
+            }
         }
-        else if(debugLevel != "NONE"){NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << 0);}
+        else if(debugLevel != "NONE"){
+            NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << 0);
+            NS_LOG_UNCOND("- Packets " << i + 1 << " TTL/HOPS: \t" << 0);
+        }
     }
     if(debugLevel != "NONE"){
         NS_LOG_UNCOND("- Packets sent: \t" << (int)dataForPackets.size());
@@ -753,25 +756,37 @@ int main(int argc, char *argv[]) {
 
     double totalBytesSent = 0.00;
     double totalBytesReceived = 0.00;
+    double totalHelloBytesSent = 0.00;
+    double totalHelloBytesReceived = 0.00;
+
     int totalPacketsSent = 0;
     int totalPacketsReceived = 0;
-    int totalAttempt = 0;
+    int totalHelloPacketsSent = 0;
+    int totalHelloPacketsReceived = 0;
+
     for (uint32_t i = 0; i < numNodes; ++i) {
         totalBytesSent += nodeHandlerArray[i].getBytesSent();
         totalBytesReceived += nodeHandlerArray[i].getBytesReceived();
         totalPacketsSent += nodeHandlerArray[i].getPacketsSent();
         totalPacketsReceived += nodeHandlerArray[i].getPacketsReceived();
-        totalAttempt += nodeHandlerArray[i].getAttempt();
+
+        totalHelloBytesSent += nodeHandlerArray[i].getHelloBytesSent();
+        totalHelloBytesReceived += nodeHandlerArray[i].getHelloBytesReceived();
+        totalHelloPacketsSent += nodeHandlerArray[i].getHelloPacketsSent();
+        totalHelloPacketsReceived += nodeHandlerArray[i].getHelloPacketsReceived();
     }
 
-    if(debugLevel != "NONE"){
+    if (debugLevel != "NONE") {
         NS_LOG_UNCOND("- Total BytesSent: \t" << totalBytesSent);
         NS_LOG_UNCOND("- Total BytesReceived: \t" << totalBytesReceived);
         NS_LOG_UNCOND("- Total PacketsSent: \t" << totalPacketsSent);
         NS_LOG_UNCOND("- Total PacketsReceived: \t" << totalPacketsReceived);
-        NS_LOG_UNCOND("- Total Attempt: \t" << totalAttempt);
+
+        NS_LOG_UNCOND("- Total BytesHelloSent: \t" << totalHelloBytesSent);
+        NS_LOG_UNCOND("- Total BytesHelloReceived: \t" << totalHelloBytesReceived);
+        NS_LOG_UNCOND("- Total PacketsHelloSent: \t" << totalHelloPacketsSent);
+        NS_LOG_UNCOND("- Total PacketsHelloReceived: \t" << totalHelloPacketsReceived);
     }
-    
 
     return 0;
 }
