@@ -35,6 +35,7 @@ typedef struct{
   bool delivered;
   double start;
   double delivered_at;
+  int ttl;
 } PacketLogData;
 
 std::string debugLevel = "EXTRACTOR"; //["NONE","NORMAL","MAX","EXTRACTOR"]
@@ -286,9 +287,11 @@ void ReceivePacket (Ptr<Socket> socket){
       }
     } else {
       if (dataForPackets[UID].delivered != true){  // Prevent multiple logs for the same pkg receiver more times
-        dataForPackets[UID].delivered = true;
-        dataForPackets[UID].delivered_at = Simulator::Now().GetSeconds();
-      if(debugLevel == "EXTRACTOR"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT DESTINATION REACHED, UID:    " << UID);}
+          dataForPackets[UID].ttl = TTL;
+          dataForPackets[UID].delivered = true;
+          dataForPackets[UID].delivered_at = Simulator::Now().GetSeconds();
+          if (debugLevel == "EXTRACTOR") {
+              NS_LOG_UNCOND(Simulator::Now().GetSeconds() << "s\t PKT DESTINATION REACHED, UID:    " << UID);}
       if(debugLevel == "NORMAL" or debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<"s I am " << ipReceiver << " finally received the package with uid:    " << UID );}
       } else {
       if(debugLevel == "MAX"){NS_LOG_UNCOND(Simulator::Now().GetSeconds() <<"s I am " << ipReceiver << " finally received the package with uid: " << UID );}
@@ -421,11 +424,11 @@ int main (int argc, char *argv[]){
     payload.setDestinationAddress(ipReceiver);
     Ptr<Packet> packet = payload.toPacket();
 
-    PacketLogData dataPacket = {false, 0.00, 0.00};
+    PacketLogData dataPacket = {false, 0.00, 0.00, 0};
     dataForPackets.push_back(dataPacket);
 
     Simulator::Schedule(Seconds(sendAfter * i), &GenerateTraffic,
-                        source, packet, UID, createStringAddressUid(ipSender, (int)UID, ";"));
+                        source, packet, UID, createStringAddressUid(ipSender, (int)UID, ";"), tempTTL);
     UID += 1;
   }
 
@@ -442,11 +445,16 @@ int main (int argc, char *argv[]){
 
   int deliveredCounter = 0;
   for (int i = 0; i < (int)dataForPackets.size(); i++) {
-    if (dataForPackets[i].delivered == true) {
-      deliveredCounter++;
-      NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << (double)(dataForPackets[i].delivered_at - dataForPackets[i].start));
-    }
-    else NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << 0);
+      if (dataForPackets[i].delivered == true) {
+          deliveredCounter++;
+          if (debugLevel != "NONE") {
+              NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << (double)(dataForPackets[i].delivered_at - dataForPackets[i].start));
+              NS_LOG_UNCOND("- Packets " << i + 1 << " TTL/HOPS: \t" << dataForPackets[i].ttl);
+          }
+      } else if (debugLevel != "NONE") {
+          NS_LOG_UNCOND("- Packets " << i + 1 << " delta delivery: \t" << 0);
+          NS_LOG_UNCOND("- Packets " << i + 1 << " TTL/HOPS: \t" << 0);
+      }
   }
   if(debugLevel != "NONE"){
     NS_LOG_UNCOND("- Packets sent: \t" << (int)dataForPackets.size());
@@ -454,7 +462,7 @@ int main (int argc, char *argv[]){
     NS_LOG_UNCOND("- Delivery percentage: \t" << ((double)deliveredCounter / (double)dataForPackets.size()) * 100.00 << "%");
     // Delivery time (?) (?) (?)
   }
-  
+
   double totalBytesSent = 0.00;
   double totalBytesReceived = 0.00;
   int totalPacketsSent = 0;
@@ -473,7 +481,12 @@ int main (int argc, char *argv[]){
     NS_LOG_UNCOND("- Total BytesReceived: \t" << totalBytesReceived);
     NS_LOG_UNCOND("- Total PacketsSent: \t" << totalPacketsSent);
     NS_LOG_UNCOND("- Total PacketsReceived: \t" << totalPacketsReceived);
-    NS_LOG_UNCOND("- Total Attempt: \t" << totalAttempt);
+
+    NS_LOG_UNCOND("- Total BytesHelloSent: \t" << 0);
+    NS_LOG_UNCOND("- Total BytesHelloReceived: \t" << 0);
+    NS_LOG_UNCOND("- Total PacketsHelloSent: \t" << 0);
+    NS_LOG_UNCOND("- Total PacketsHelloReceived: \t" << 0);
+    // NS_LOG_UNCOND("- Total Attempt: \t" << totalAttempt);
   }
   return 0;
 }
