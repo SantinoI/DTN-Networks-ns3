@@ -351,8 +351,8 @@ int main (int argc, char *argv[]){
   // FROM WIFI SIMPLE ADHOC GRID
 
   // set it to zero; otherwise, gain will be added
-  wifiPhy.Set ("RxGain", DoubleValue (-1) );
-  wifiPhy.Set ("TxGain", DoubleValue (-1) );
+  wifiPhy.Set ("RxGain", DoubleValue (4) );
+  wifiPhy.Set ("TxGain", DoubleValue (4) );
   // ns-3 supports RadioTap and Prism tracing extensions for 802.11b
   wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
 

@@ -26,7 +26,7 @@ NS3PATH = "/home/alessandro/Documents/ns-allinone-3.30.1/ns-3.30.1/"
 CURRENT_PATH = os.path.abspath(os.getcwd())
 
 FINAL_REPORT = [
-    "- Packets sent:",
+    # "- Packets sent:",
     "- Packets delivered:",
     "- Delivery percentage:",
     "- Total BytesSent:",
@@ -42,14 +42,14 @@ FINAL_REPORT = [
 i_packet = {"send_at": 0.0, "uid": 0, "ack": False, "received": False, "flying_pkt": 0, "until_now_pkt": 0}
 
 
-def update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes):
+def update_dataforplot(dataforplot, single_line, match_string, alghname, xasixvalue):
     if alghname not in dataforplot:
         dataforplot[alghname] = {}
     value = single_line.replace(match_string, "").strip()
     studycase = match_string.replace("-", "").replace(":", "").strip()
     if studycase not in dataforplot[alghname]:
         dataforplot[alghname][studycase] = []
-    dataforplot[alghname][studycase].append({"x": float(nnodes.strip()), "y": float(value.replace("%", "").strip())})
+    dataforplot[alghname][studycase].append({"x": float(xasixvalue.strip()), "y": float(value.replace("%", "").strip())})
     return dataforplot
 
 
@@ -124,15 +124,17 @@ def start_simulation(cmd, n, output):
 
 
 if __name__ == "__main__":
-    default_args = "--sinkNode=1 --sourceNode=0 --seed=112 --simulationTime=21600 --sendAfter=100"
-    alghoritms_fname = ["prophet", "epidemic"]
+    default_args = "--sinkNode=1 --sourceNode=0 --seed=177 --simulationTime=21600 --sendAfter=100 --ttl={}"
+    alghoritms_fname = ["epidemic"]
     num_packets = 200
-    num_nodes_chunk = [15, 25, 35, 50, 75, 100, 150, 200, 300]
+    num_nodes_chunk = [100]
+    alltls = [15, 30, 45, 60]
     # num_nodes_chunk.reverse()
     commands_list = []
     for alghname in alghoritms_fname:
-        for nnodes in num_nodes_chunk:
-            commands_list.append("scratch/{} --numNodes={} --numPackets={} {}".format(alghname, nnodes, num_packets, default_args))
+        for xasixvalue in num_nodes_chunk:
+            for ttl in alltls:
+                commands_list.append("scratch/{} --numNodes={} --numPackets={} {}".format(alghname, xasixvalue, num_packets, default_args.format(ttl)))
 
     logger.info("Ready for start {} commands: {}".format(len(commands_list), "\n» " + "\n» ".join(commands_list)))
     time.sleep(5)
@@ -144,7 +146,7 @@ if __name__ == "__main__":
     output_folder = CURRENT_PATH + "/aio-simulator/" + datetime.datetime.now().strftime("%d%m%Y%H%M%S")
     os.mkdir(output_folder)
 
-    max_process = int(multiprocessing.cpu_count() / 2)
+    max_process = int(multiprocessing.cpu_count())
     multiprocess = []
     for index in range(0, len(commands_list)):
         fulloutput = output_folder + "/{}.out.txt".format(
@@ -173,16 +175,17 @@ if __name__ == "__main__":
 
         cmd = fname.split("/")[-1]
         args = cmd.split(" ")
-        # print(cmd, args)
+        print(cmd, args)
 
         alghname = args[0]
-        nnodes = args[1].replace("--numNodes=", "")
+        # xasixvalue = args[1].replace("--numNodes=", "")
+        xasixvalue = args[-1].replace("--ttl=", "").split('.')[0]  # Remove ext
 
         # - Packets {} delta delivery:
         for match_string in FINAL_REPORT:
             for single_line in outlines:
                 if single_line.startswith(match_string):
-                    dataforplot = update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes)
+                    dataforplot = update_dataforplot(dataforplot, single_line, match_string, alghname, xasixvalue)
                     break
 
         for packet_string in ["- Packets {} delta delivery:", "- Packets {} TTL/HOPS:"]:
@@ -192,7 +195,7 @@ if __name__ == "__main__":
                 for single_line in outlines:
                     match_string = packet_string.format(npkt)
                     if single_line.startswith(match_string):
-                        dataforplot = update_dataforplot(dataforplot, single_line, match_string, alghname, nnodes)
+                        dataforplot = update_dataforplot(dataforplot, single_line, match_string, alghname, xasixvalue)
                         founded = True
                         break
 
@@ -201,7 +204,8 @@ if __name__ == "__main__":
             data_x = [item["x"] for item in dataforplot[alghname][studycase]]
             data_y = [item["y"] for item in dataforplot[alghname][studycase]]
             plt.plot(data_x, data_y)
-            xlabel = "Node number".upper()
+            # xlabel = "Node number".upper()
+            xlabel = "TTL".upper()
             plt.xlabel(xlabel)
             studycase_str = studycase.upper().replace("-", "").replace(":", "")
             plt.ylabel(studycase_str)
